@@ -45,3 +45,8 @@ tmp_test/
 # Logs/temp files
 *.log
 *.tmp
+
+*.iss
+*.spec
+*.exe
+/Instalador/

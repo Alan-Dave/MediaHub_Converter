@@ -24,6 +24,7 @@ from apps.media_converter.ui.ui_theme import (
 class ImageDropLabel(QLabel):
     def __init__(self, on_image_dropped, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText("Arrastra aquí una imagen")
         self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 180px;")
@@ -54,6 +55,11 @@ class ImageDropLabel(QLabel):
                 QMessageBox.warning(self, "Formato no soportado", "Este archivo no es una imagen válida.")
         else:
             event.ignore()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if hasattr(self.main_window, 'open_batch_manager'):
+                self.main_window.open_batch_manager()
 
 
 class QualityEnhancerUI(QWidget):
@@ -123,6 +129,21 @@ class QualityEnhancerUI(QWidget):
         self.layout.addWidget(card)
         self.setLayout(self.layout)
 
+    def open_batch_manager(self):
+        if len(self.batch_files) > 1:
+            from core.ui.batch_dialog import BatchDialog
+            from PyQt6.QtWidgets import QDialog
+            dialog = BatchDialog(self.batch_files, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.batch_files = dialog.get_files()
+                if len(self.batch_files) == 0:
+                    self.remove_image()
+                else:
+                    self.image_label.clear()
+                    self.image_label.setText(f"{len(self.batch_files)} imágenes seleccionadas")
+        elif len(self.batch_files) == 1 or self.image_path:
+            pass
+
     def go_back(self):
         from core.ui.hub_window import HubWindow
         self.index_window = HubWindow()
@@ -149,11 +170,12 @@ class QualityEnhancerUI(QWidget):
             return
         valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
         files = []
-        for root, _, names in os.walk(folder_path):
-            for name in names:
+        for name in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, name)
+            if os.path.isfile(file_path):
                 ext = os.path.splitext(name)[1].lower()
                 if ext in valid_exts:
-                    files.append(os.path.join(root, name))
+                    files.append(file_path)
         if not files:
             QMessageBox.warning(self, "Sin archivos", "No se encontraron imágenes compatibles en la carpeta.")
             return

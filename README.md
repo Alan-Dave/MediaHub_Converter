@@ -1,4 +1,4 @@
-# Media Hub (Versión 2.0)
+# Media Hub (Versión 1.1)
 
 Aplicación de escritorio modular hecha en Python (PyQt6) para agrupar múltiples herramientas de conversión y edición impulsadas por Inteligencia Artificial, sin depender de páginas con anuncios.
 

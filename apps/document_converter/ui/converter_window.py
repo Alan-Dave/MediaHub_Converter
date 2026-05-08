@@ -22,6 +22,7 @@ from apps.document_converter.ui.ui_theme import (
 class FileDropLabel(QLabel):
     def __init__(self, on_file_dropped, allowed_extensions, parent=None, placeholder="Arrastra aquí un archivo"):
         super().__init__(parent)
+        self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText(placeholder)
         self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 140px;")
@@ -55,6 +56,11 @@ class FileDropLabel(QLabel):
                 )
         else:
             event.ignore()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if hasattr(self.main_window, 'open_batch_manager'):
+                self.main_window.open_batch_manager()
 
 class RotatingLabel(QLabel):
     def __init__(self, pixmap, parent=None):
@@ -183,6 +189,20 @@ class DocumentConverterWindow(QWidget):
         self.file_path = None
         self.batch_files = []
 
+    def open_batch_manager(self):
+        if len(self.batch_files) > 1:
+            from core.ui.batch_dialog import BatchDialog
+            from PyQt6.QtWidgets import QDialog
+            dialog = BatchDialog(self.batch_files, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.batch_files = dialog.get_files()
+                if len(self.batch_files) == 0:
+                    self.remove_file()
+                else:
+                    self.file_label.setText(f"{len(self.batch_files)} archivos seleccionados")
+        elif len(self.batch_files) == 1 or self.file_path:
+            pass
+
     def select_file(self):
         file_dialog = QFileDialog()
         filter_str = f"Archivos (*.{self.from_ext})"
@@ -207,10 +227,11 @@ class DocumentConverterWindow(QWidget):
             return
         valid_ext = f".{self.from_ext}"
         files = []
-        for root, _, names in os.walk(folder_path):
-            for name in names:
+        for name in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, name)
+            if os.path.isfile(file_path):
                 if os.path.splitext(name)[1].lower() == valid_ext:
-                    files.append(os.path.join(root, name))
+                    files.append(file_path)
         if not files:
             QMessageBox.warning(self, "Sin archivos", f"No se encontraron archivos {valid_ext} en la carpeta.")
             return

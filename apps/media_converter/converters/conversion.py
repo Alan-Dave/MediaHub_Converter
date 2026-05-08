@@ -124,6 +124,11 @@ class ImageFormats:
                 img.convert('RGB').save(ruta_destino, 'PNG', optimize=True)
         elif formato_lower == 'webp':
             img.save(ruta_destino, 'WEBP', quality=quality, method=6)
+        elif formato_lower == 'ico':
+            if img.mode != 'RGBA':
+                img = img.convert('RGBA')
+            # Ensure it fits max standard ico size, but PIL handles standard resizing or saves as is.
+            img.save(ruta_destino, format='ICO')
         else:
             try:
                 img.save(ruta_destino, formato.upper())
@@ -131,6 +136,16 @@ class ImageFormats:
                 img.save(ruta_destino)
 
         return f"✅ Convertido: {os.path.basename(ruta_destino)}"
+
+    @staticmethod
+    def convertir(ruta_origen, ruta_destino, formato_destino=None):
+        try:
+            if formato_destino is None:
+                formato_destino = os.path.splitext(ruta_destino)[1].lstrip('.').lower()
+            img = ImageFormats._open_image(ruta_origen)
+            return ImageFormats._save_image(img, ruta_destino, formato_destino)
+        except Exception as e:
+            return f"⚠️ Error con {os.path.basename(ruta_origen)}: {e}"
 
     @staticmethod
     def convertir_jpg_a_png(ruta_origen, ruta_destino):
@@ -254,8 +269,8 @@ class ImageEnhancerLogic:
     def _download_model_if_needed():
         import requests
         import zipfile
-        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
-        models_dir = os.path.join(repo_root, "models", "realesrgan")
+        appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
+        models_dir = os.path.join(appdata_dir, "MediaHub", "models", "realesrgan")
         os.makedirs(models_dir, exist_ok=True)
         exe_path = os.path.join(models_dir, "realesrgan-ncnn-vulkan.exe")
         

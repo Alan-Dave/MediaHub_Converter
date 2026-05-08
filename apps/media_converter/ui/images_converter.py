@@ -21,27 +21,20 @@ from apps.media_converter.ui.ui_theme import (
     make_card_container,
 )
 
-CONVERT_FUNCTIONS = {
-    ("jpg", "png"): ImageFormats.convertir_jpg_a_png,
-    ("jpg", "webp"): ImageFormats.convertir_jpg_a_webp,
-    ("png", "jpg"): ImageFormats.convertir_png_a_jpg,
-    ("png", "webp"): ImageFormats.convertir_png_a_webp,
-    ("webp", "jpg"): ImageFormats.convertir_webp_a_jpg,
-    ("webp", "png"): ImageFormats.convertir_webp_a_png,
-}
-IMAGE_FORMATS = ["png", "jpg", "webp"]
+IMAGE_FORMATS = ["png", "jpg", "webp", "ico", "bmp"]
 
 
 class ImageDropLabel(QLabel):
     def __init__(self, on_image_dropped, parent=None):
         super().__init__(parent)
+        self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText("Arrastra aquí una imagen")
         self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 180px;")
         self.setAcceptDrops(True)
         self.image_path = None
         self.on_image_dropped = on_image_dropped
-        self.allowed_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.webp')
+        self.allowed_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.webp', '.ico')
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -65,6 +58,11 @@ class ImageDropLabel(QLabel):
                 QMessageBox.warning(self, "Formato no soportado", "Este archivo no es una imagen válida para esta sección.")
         else:
             event.ignore()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            if hasattr(self.main_window, 'open_batch_manager'):
+                self.main_window.open_batch_manager()
 
 
 class ImageConverter(QWidget):
@@ -99,13 +97,13 @@ class ImageConverter(QWidget):
 
         combo_layout = QHBoxLayout()
         self.from_combo = QComboBox()
-        self.from_combo.addItems(["png", "jpg", "webp"])
+        self.from_combo.addItems(IMAGE_FORMATS)
         self.from_combo.setEnabled(False)
         combo_layout.addWidget(QLabel("Formato de origen:"))
         combo_layout.addWidget(self.from_combo)
 
         self.to_combo = QComboBox()
-        self.to_combo.addItems(["png", "jpg", "webp"])
+        self.to_combo.addItems(IMAGE_FORMATS)
         combo_layout.addWidget(QLabel("Formato de destino:"))
         combo_layout.addWidget(self.to_combo)
         card_layout.addLayout(combo_layout)
@@ -144,6 +142,21 @@ class ImageConverter(QWidget):
         self.image_path = None
         self.batch_files = []
 
+    def open_batch_manager(self):
+        if len(self.batch_files) > 1:
+            from core.ui.batch_dialog import BatchDialog
+            from PyQt6.QtWidgets import QDialog
+            dialog = BatchDialog(self.batch_files, self)
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                self.batch_files = dialog.get_files()
+                if len(self.batch_files) == 0:
+                    self.remove_image()
+                else:
+                    self.image_label.clear()
+                    self.image_label.setText(f"{len(self.batch_files)} imágenes seleccionadas")
+        elif len(self.batch_files) == 1 or self.image_path:
+            pass # Solo hay un archivo, no es necesario abrir el gestor de lotes
+
     def go_back(self):
         from apps.media_converter.ui.index import LauncherWindow
         self.index_window = LauncherWindow()
@@ -152,7 +165,7 @@ class ImageConverter(QWidget):
 
     def select_image(self):
         file_dialog = QFileDialog()
-        file_path, _ = file_dialog.getOpenFileName(self, "Seleccionar Imagen", "", "Imágenes (*.png *.jpg *.jpeg *.bmp *.webp)")
+        file_path, _ = file_dialog.getOpenFileName(self, "Seleccionar Imagen", "", "Imágenes (*.png *.jpg *.jpeg *.bmp *.webp *.ico)")
         if file_path:
             self.batch_files = []
             self.image_path = file_path
@@ -193,13 +206,14 @@ class ImageConverter(QWidget):
         folder_path = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Imágenes")
         if not folder_path:
             return
-        valid_exts = {".png", ".jpg", ".jpeg", ".webp"}
+        valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".ico"}
         files = []
-        for root, _, names in os.walk(folder_path):
-            for name in names:
+        for name in os.listdir(folder_path):
+            file_path = os.path.join(folder_path, name)
+            if os.path.isfile(file_path):
                 ext = os.path.splitext(name)[1].lower()
                 if ext in valid_exts:
-                    files.append(os.path.join(root, name))
+                    files.append(file_path)
         if not files:
             QMessageBox.warning(self, "Sin archivos", "No se encontraron imágenes compatibles en la carpeta.")
             return
@@ -264,27 +278,27 @@ class ImageConverter(QWidget):
                     if from_format == to_format:
                         skipped += 1
                     else:
-                        func = CONVERT_FUNCTIONS.get((from_format, to_format))
-                        if not func:
-                            failed += 1
+                        nombre = os.path.splitext(os.path.basename(file_path))[0]
+                        ruta_destino = os.path.join(output_dir, f"{nombre}.{to_format}")
+                        result = ImageFormats.convertir(file_path, ruta_destino, to_format)
+                        if str(result).startswith("✅"):
+                            converted += 1
                         else:
-                            nombre = os.path.splitext(os.path.basename(file_path))[0]
-                            ruta_destino = os.path.join(output_dir, f"{nombre}.{to_format}")
-                            result = func(file_path, ruta_destino)
-                            if str(result).startswith("✅"):
-                                converted += 1
-                            else:
-                                failed += 1
+                            failed += 1
                     progress.setLabelText(f"Convirtiendo imágenes... ({idx}/{total})")
                     progress.setValue(idx)
                     QApplication.processEvents()
             finally:
                 progress.close()
 
+            msg = f"Convertidos: {converted}\nFallidos: {failed}"
+            if skipped > 0:
+                msg += f"\n\nSe omitieron {skipped} imágenes porque ya estaban en formato {to_format.upper()}."
+
             QMessageBox.information(
                 self,
                 "Conversión masiva",
-                f"Convertidos: {converted}\nOmitidos (mismo formato): {skipped}\nFallidos: {failed}",
+                msg,
             )
             try:
                 os.startfile(output_dir)
@@ -301,11 +315,6 @@ class ImageConverter(QWidget):
             QMessageBox.warning(self, "Advertencia", "El formato de origen y destino no pueden ser iguales.")
             return
 
-        func = CONVERT_FUNCTIONS.get((from_format, to_format))
-        if not func:
-            QMessageBox.warning(self, "Error", "Conversión no soportada.")
-            return
-
         nombre = os.path.splitext(os.path.basename(self.image_path))[0]
         ruta_destino = os.path.join(output_dir, f"{nombre}.{to_format}")
 
@@ -316,7 +325,7 @@ class ImageConverter(QWidget):
         progress.show()
         QApplication.processEvents()
         try:
-            resultado = func(self.image_path, ruta_destino)
+            resultado = ImageFormats.convertir(self.image_path, ruta_destino, to_format)
         finally:
             progress.close()
 
