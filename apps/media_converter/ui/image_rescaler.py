@@ -11,12 +11,12 @@ from PyQt6.QtCore import Qt
 
 from apps.media_converter.converters.conversion import ImageRescalerLogic
 from apps.media_converter.ui.ui_theme import (
-    APP_COLORS,
-    BUTTON_STYLE,
-    DROP_LABEL_STYLE,
-    SOFT_BUTTON_STYLE,
-    REMOVE_BUTTON_STYLE,
-    CONVERT_BUTTON_STYLE,
+    get_app_colors,
+    get_button_style,
+    get_drop_label_style,
+    get_soft_button_style,
+    get_remove_button_style,
+    get_convert_button_style,
     apply_window_theme,
     make_card_container,
 )
@@ -27,7 +27,7 @@ class ImageDropLabel(QLabel):
         self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText("Arrastra aquí una imagen")
-        self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 180px;")
+        self.setStyleSheet(f"{get_drop_label_style()}min-height: 180px;")
         self.setAcceptDrops(True)
         self.image_path = None
         self.on_image_dropped = on_image_dropped
@@ -73,6 +73,7 @@ class ImageRescaler(QWidget):
         self.setWindowTitle("Reescalador de Imágenes")
         self.setGeometry(100, 100, 520, 700)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         
         self.original_width = 0
         self.original_height = 0
@@ -90,14 +91,14 @@ class ImageRescaler(QWidget):
         back_btn = QPushButton("← Volver")
         back_btn.setFixedWidth(90)
         back_btn.clicked.connect(self.go_back)
-        back_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        back_btn.setStyleSheet(get_soft_button_style())
         top_layout.addWidget(back_btn)
         top_layout.addStretch()
         card_layout.addLayout(top_layout)
 
         self.label = QLabel("Selecciona o arrastra una imagen para reescalar")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet(f"color: {APP_COLORS['text_main']}; font-size: 14pt; font-weight:600;")
+        self.label.setStyleSheet(f"color: {self._colors['text_main']}; font-size: 14pt; font-weight:600;")
         card_layout.addWidget(self.label)
 
         self.image_label = ImageDropLabel(self.on_image_dropped, self)
@@ -115,8 +116,8 @@ class ImageRescaler(QWidget):
         self.mode_group.addButton(self.radio_pixels)
         self.mode_group.addButton(self.radio_percentage)
         
-        self.radio_pixels.setStyleSheet(f"color: {APP_COLORS['text_main']};")
-        self.radio_percentage.setStyleSheet(f"color: {APP_COLORS['text_main']};")
+        self.radio_pixels.setStyleSheet(f"color: {self._colors['text_main']};")
+        self.radio_percentage.setStyleSheet(f"color: {self._colors['text_main']};")
         
         mode_layout.addWidget(QLabel("Modo de Reescalado:"))
         mode_layout.addWidget(self.radio_pixels)
@@ -147,7 +148,7 @@ class ImageRescaler(QWidget):
         
         self.check_aspect = QCheckBox("Mantener relación de aspecto")
         self.check_aspect.setChecked(True)
-        self.check_aspect.setStyleSheet(f"color: {APP_COLORS['text_main']};")
+        self.check_aspect.setStyleSheet(f"color: {self._colors['text_main']};")
         pixels_layout.addWidget(self.check_aspect)
         config_layout.addWidget(self.pixels_widget)
         
@@ -167,7 +168,7 @@ class ImageRescaler(QWidget):
         # Opciones Generales
         self.check_no_enlarge = QCheckBox("No agrandar si el original es más pequeño")
         self.check_no_enlarge.setChecked(False)
-        self.check_no_enlarge.setStyleSheet(f"color: {APP_COLORS['text_main']};")
+        self.check_no_enlarge.setStyleSheet(f"color: {self._colors['text_main']};")
         config_layout.addWidget(self.check_no_enlarge)
         
         card_layout.addLayout(config_layout)
@@ -175,24 +176,24 @@ class ImageRescaler(QWidget):
         # Botones de Acción
         self.select_button = QPushButton("Seleccionar Imagen")
         self.select_button.clicked.connect(self.select_image)
-        self.select_button.setStyleSheet(BUTTON_STYLE)
+        self.select_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_button)
 
         self.select_folder_button = QPushButton("Seleccionar Carpeta")
         self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.setStyleSheet(BUTTON_STYLE)
+        self.select_folder_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_folder_button)
 
         self.remove_button = QPushButton("Quitar todo")
         self.remove_button.clicked.connect(self.remove_image)
         self.remove_button.setEnabled(False)
-        self.remove_button.setStyleSheet(REMOVE_BUTTON_STYLE)
+        self.remove_button.setStyleSheet(get_remove_button_style())
         card_layout.addWidget(self.remove_button)
 
         self.convert_button = QPushButton("Reescalar Imagen")
         self.convert_button.clicked.connect(self.convert_image)
         self.convert_button.setEnabled(False)
-        self.convert_button.setStyleSheet(CONVERT_BUTTON_STYLE)
+        self.convert_button.setStyleSheet(get_convert_button_style())
         card_layout.addWidget(self.convert_button)
 
         # Eventos para cambiar de modo

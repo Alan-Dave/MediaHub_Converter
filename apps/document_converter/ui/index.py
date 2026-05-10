@@ -6,8 +6,9 @@ from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
 import sys
 from apps.document_converter.ui.ui_theme import (
-    APP_COLORS,
-    SOFT_BUTTON_STYLE,
+    get_app_colors,
+    get_soft_button_style,
+    get_doc_btn_style,
     apply_window_theme,
     make_card_container,
 )
@@ -21,6 +22,7 @@ class DocumentLauncherWindow(QWidget):
         self.setWindowTitle("Convertidor de Documentos")
         self.setGeometry(200, 200, 700, 500)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         self.init_ui()
 
     def init_ui(self):
@@ -31,32 +33,14 @@ class DocumentLauncherWindow(QWidget):
 
         title = QLabel("Convertidor de Documentos")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(f"font-size: 22pt; font-weight: 700; color: {APP_COLORS['text_main']}; margin-bottom: 24px;")
+        title.setStyleSheet(f"font-size: 22pt; font-weight: 700; color: {self._colors['text_main']}; margin-bottom: 24px;")
         layout.addWidget(title)
 
         # Contenedor de las dos columnas
         columns_layout = QHBoxLayout()
         columns_layout.setSpacing(40)
 
-        BTN_STYLE = """
-            QPushButton {
-                background-color: #FFFFFF;
-                border: 1px solid #E2E8F0;
-                border-radius: 8px;
-                padding: 12px 20px;
-                text-align: left;
-                font-size: 11pt;
-                font-weight: bold;
-                color: #2D3748;
-            }
-            QPushButton:hover {
-                background-color: #F7FAFC;
-                border: 1px solid #CBD5E0;
-            }
-            QPushButton:pressed {
-                background-color: #EDF2F7;
-            }
-        """
+        BTN_STYLE = get_doc_btn_style()
 
         def add_menu_button(layout, text, icon_name):
             btn = QPushButton(f"  {text}")
@@ -78,7 +62,7 @@ class DocumentLauncherWindow(QWidget):
         # Columna Izquierda: A PDF
         left_col = QVBoxLayout()
         left_title = QLabel("CONVERTIR A PDF")
-        left_title.setStyleSheet(f"color: {APP_COLORS['text_muted']}; font-weight: bold; font-size: 14pt; margin-bottom: 12px;")
+        left_title.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold; font-size: 14pt; margin-bottom: 12px;")
         left_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         left_col.addWidget(left_title)
 
@@ -98,7 +82,7 @@ class DocumentLauncherWindow(QWidget):
         # Columna Derecha: DESDE PDF
         right_col = QVBoxLayout()
         right_title = QLabel("CONVERTIR DESDE PDF")
-        right_title.setStyleSheet(f"color: {APP_COLORS['text_muted']}; font-weight: bold; font-size: 14pt; margin-bottom: 12px;")
+        right_title.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold; font-size: 14pt; margin-bottom: 12px;")
         right_title.setAlignment(Qt.AlignmentFlag.AlignCenter)
         right_col.addWidget(right_title)
 
@@ -127,13 +111,13 @@ class DocumentLauncherWindow(QWidget):
         real_exit_btn = QPushButton("Salir")
         real_exit_btn.setFixedWidth(120)
         real_exit_btn.clicked.connect(self.close)
-        real_exit_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        real_exit_btn.setStyleSheet(get_soft_button_style())
         footer.addWidget(real_exit_btn)
         
         exit_btn = QPushButton("← Volver al Hub")
         exit_btn.setFixedWidth(160)
         exit_btn.clicked.connect(self.go_to_hub)
-        exit_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        exit_btn.setStyleSheet(get_soft_button_style())
         footer.addWidget(exit_btn)
         
         footer.addStretch()

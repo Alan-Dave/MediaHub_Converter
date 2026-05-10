@@ -1,142 +1,58 @@
+"""
+apps/document_converter/ui/ui_theme.py
+────────────────────────────────────────
+Thin shim that reads current styles from the global ThemeManager.
+All constants are kept as module-level aliases so existing imports work unchanged.
+"""
+
 from PyQt6.QtWidgets import QFrame, QVBoxLayout, QWidget
-
-
-APP_COLORS = {
-    "bg": "#FAF7F4",
-    "card": "#FFFFFF",
-    "text_main": "#4B362D",
-    "text_muted": "#7A5A49",
-    "border": "#E9D8CD",
-    "accent": "#E7BFA7",
-    "accent_hover": "#DFAE90",
-    "accent_soft": "#F8EEE8",
-    "drop_bg": "#FCF6F1",
-}
+from core.theme_manager import ThemeManager
 
 RADIUS_LG = 18
 RADIUS_MD = 12
 RADIUS_SM = 10
 
 
+def _tm():
+    return ThemeManager.instance()
+
+
 def apply_window_theme(widget: QWidget) -> None:
-    widget.setStyleSheet(
-        f"""
-        QWidget {{
-            background-color: {APP_COLORS["bg"]};
-            color: {APP_COLORS["text_main"]};
-            font-family: "Segoe UI", "Inter", sans-serif;
-        }}
-        QLabel {{
-            background: transparent;
-        }}
-        QMessageBox {{
-            background-color: {APP_COLORS["bg"]};
-        }}
-        QMessageBox QPushButton {{
-            background: {APP_COLORS["accent_soft"]};
-            border: 1px solid {APP_COLORS["border"]};
-            border-radius: {RADIUS_SM}px;
-            padding: 8px 14px;
-            font-weight: 600;
-            min-width: 90px;
-        }}
-        QMessageBox QPushButton:hover {{
-            background: #F3E5DC;
-        }}
-        QProgressDialog {{
-            background: {APP_COLORS["bg"]};
-            border: 1px solid {APP_COLORS["border"]};
-            border-radius: {RADIUS_MD}px;
-        }}
-        QProgressBar {{
-            background: #FFFFFF;
-            border: 1px solid {APP_COLORS["border"]};
-            border-radius: {RADIUS_SM}px;
-            min-height: 10px;
-            text-align: center;
-            color: {APP_COLORS["text_main"]};
-        }}
-        QProgressBar::chunk {{
-            background: {APP_COLORS["accent"]};
-            border-radius: {RADIUS_SM}px;
-        }}
-        """
-    )
+    widget.setStyleSheet(_tm().app_styles()["window"])
 
 
-def make_card_container() -> tuple[QFrame, QVBoxLayout]:
+def make_card_container() -> tuple:
     card = QFrame()
     card.setObjectName("mainCard")
-    card.setStyleSheet(
-        f"""
-        QFrame#mainCard {{
-            background: {APP_COLORS["card"]};
-            border: 1px solid {APP_COLORS["border"]};
-            border-radius: {RADIUS_LG}px;
-        }}
-        """
-    )
+    card.setStyleSheet(_tm().app_styles()["card"])
     layout = QVBoxLayout(card)
     layout.setContentsMargins(24, 24, 24, 24)
     layout.setSpacing(14)
     return card, layout
 
 
-BUTTON_STYLE = (
-    f"QPushButton{{background:{APP_COLORS['accent']};color:{APP_COLORS['text_main']};"
-    f"padding:10px 12px;border-radius:{RADIUS_MD}px;border:1px solid {APP_COLORS['border']};font-weight:600;}}"
-    f"QPushButton:hover{{background:{APP_COLORS['accent_hover']};}}"
-    f"QPushButton:pressed{{background:#D8A587;}}"
-    f"QPushButton:disabled{{background:{APP_COLORS['accent_soft']};color:#B39382;}}"
-)
+def _s(key: str) -> str:
+    return _tm().app_styles()[key]
 
 
-SOFT_BUTTON_STYLE = (
-    f"QPushButton{{background:{APP_COLORS['accent_soft']};color:{APP_COLORS['text_main']};"
-    f"padding:8px 10px;border-radius:{RADIUS_MD}px;border:1px solid {APP_COLORS['border']};font-weight:600;}}"
-    f"QPushButton:hover{{background:#F3E5DC;}}"
-    f"QPushButton:pressed{{background:#EFDCCF;}}"
-)
+APP_COLORS = _tm().app_colors()
 
 
-REMOVE_BUTTON_STYLE = (
-    f"QPushButton{{background:#FF684D;color:#FFFFFF;"
-    f"padding:10px 12px;border-radius:{RADIUS_MD}px;border:1px solid #D0553F;font-weight:600;}}"
-    f"QPushButton:hover{{background:#FF856E;}}"
-    f"QPushButton:pressed{{background:#E05A42;}}"
-    f"QPushButton:disabled{{background:{APP_COLORS['accent_soft']};color:#B39382;border:1px solid {APP_COLORS['border']};}}"
-)
-
-CONVERT_BUTTON_STYLE = (
-    f"QPushButton{{background:#95FF82;color:#1A4D1A;"
-    f"padding:10px 12px;border-radius:{RADIUS_MD}px;border:1px solid #75D662;font-weight:600;}}"
-    f"QPushButton:hover{{background:#AFFF9E;}}"
-    f"QPushButton:pressed{{background:#78E565;}}"
-    f"QPushButton:disabled{{background:{APP_COLORS['accent_soft']};color:#B39382;border:1px solid {APP_COLORS['border']};}}"
-)
-
-FFMPEG_BUTTON_STYLE = (
-    f"QPushButton{{background:#D0553F;color:#FFFFFF;"
-    f"padding:8px 10px;border-radius:{RADIUS_MD}px;border:1px solid #A8412D;font-weight:600;}}"
-    f"QPushButton:hover{{background:#E0644D;}}"
-    f"QPushButton:pressed{{background:#B54632;}}"
-)
-
-COMBO_STYLE = (
-    f"QComboBox{{background:#FFFFFF;border:1px solid {APP_COLORS['border']};padding:6px;"
-    f"border-radius:{RADIUS_SM}px;color:{APP_COLORS['text_main']};min-height:18px;}}"
-    f"QComboBox:hover{{border:1px solid #DDBBA8;}}"
-    f"QComboBox:focus{{border:1px solid #D4AA93;}}"
-    f"QComboBox::drop-down{{border:none;padding-right:6px;}}"
-    f"QComboBox QAbstractItemView{{background:#FFFFFF;border:1px solid {APP_COLORS['border']};"
-    f"selection-background-color:{APP_COLORS['accent_soft']};selection-color:{APP_COLORS['text_main']};}}"
-)
+def get_button_style()        -> str: return _s("button")
+def get_soft_button_style()   -> str: return _s("soft_button")
+def get_remove_button_style() -> str: return _s("remove_button")
+def get_convert_button_style()-> str: return _s("convert_button")
+def get_ffmpeg_button_style() -> str: return _s("ffmpeg_button")
+def get_combo_style()         -> str: return _s("combo")
+def get_drop_label_style()    -> str: return _s("drop_label")
+def get_app_colors()          -> dict: return _tm().app_colors()
+def get_doc_btn_style()       -> str: return _s("doc_btn")
 
 
-DROP_LABEL_STYLE = (
-    f"background: {APP_COLORS['drop_bg']};"
-    f"border: 2px dashed {APP_COLORS['border']};"
-    f"color: {APP_COLORS['text_muted']};"
-    "padding: 12px;"
-    f"border-radius: {RADIUS_MD}px;"
-)
+BUTTON_STYLE        = get_button_style()
+SOFT_BUTTON_STYLE   = get_soft_button_style()
+REMOVE_BUTTON_STYLE = get_remove_button_style()
+CONVERT_BUTTON_STYLE= get_convert_button_style()
+FFMPEG_BUTTON_STYLE = get_ffmpeg_button_style()
+COMBO_STYLE         = get_combo_style()
+DROP_LABEL_STYLE    = get_drop_label_style()

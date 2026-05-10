@@ -11,8 +11,8 @@ from apps.media_converter.ui.video_converter import VideoConverter
 from apps.media_converter.ui.images_converter import ImageConverter
 from apps.media_converter.ui.image_rescaler import ImageRescaler
 from apps.media_converter.ui.ui_theme import (
-    APP_COLORS,
-    SOFT_BUTTON_STYLE,
+    get_app_colors,
+    get_soft_button_style,
     apply_window_theme,
     make_card_container,
 )
@@ -26,6 +26,7 @@ class LauncherWindow(QWidget):
         self.setWindowTitle("Elige tu tipo de conversión")
         self.setGeometry(200, 200, 360, 220)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         self.init_ui()
 
     def init_ui(self):
@@ -38,7 +39,7 @@ class LauncherWindow(QWidget):
 
         title = QLabel("Elige tu tipo de conversión")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title.setStyleSheet(f"font-size: 22pt; font-weight: 700; color: {APP_COLORS['text_main']}; margin-bottom: 8px;")
+        title.setStyleSheet(f"font-size: 22pt; font-weight: 700; color: {self._colors['text_main']}; margin-bottom: 8px;")
         layout.addWidget(title)
 
         icons_layout = QHBoxLayout()
@@ -55,13 +56,13 @@ class LauncherWindow(QWidget):
             btn.setIconSize(QSize(180, 180))
             btn.setFixedSize(200, 200)
             btn.setStyleSheet(
-                f"QPushButton{{background:#FFFFFF;border-radius:20px;border:1px solid {APP_COLORS['border']};}}"
-                "QPushButton:hover{background:#F8F4F1}"
+                f"QPushButton{{background:{self._colors['card']};border-radius:20px;border:1px solid {self._colors['border']};}}"
+                f"QPushButton:hover{{background:{self._colors['accent_soft']}}}"
             )
             btn.clicked.connect(handler)
             lbl = QLabel(label_text)
             lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            lbl.setStyleSheet(f"color: {APP_COLORS['text_muted']}; font-weight:600; margin-top:8px;")
+            lbl.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight:600; margin-top:8px;")
             v.addWidget(btn, alignment=Qt.AlignmentFlag.AlignCenter)
             v.addWidget(lbl)
             return v
@@ -79,13 +80,13 @@ class LauncherWindow(QWidget):
         real_exit_btn = QPushButton("Salir")
         real_exit_btn.setFixedWidth(120)
         real_exit_btn.clicked.connect(self.close)
-        real_exit_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        real_exit_btn.setStyleSheet(get_soft_button_style())
         footer.addWidget(real_exit_btn)
         
         exit_btn = QPushButton("← Volver al Hub")
         exit_btn.setFixedWidth(160)
         exit_btn.clicked.connect(self.go_to_hub)
-        exit_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        exit_btn.setStyleSheet(get_soft_button_style())
         footer.addWidget(exit_btn)
         
         footer.addStretch()

@@ -10,13 +10,13 @@ from PyQt6.QtCore import Qt
 
 from apps.media_converter.converters.conversion import ImageFormats
 from apps.media_converter.ui.ui_theme import (
-    APP_COLORS,
-    BUTTON_STYLE,
-    COMBO_STYLE,
-    DROP_LABEL_STYLE,
-    SOFT_BUTTON_STYLE,
-    REMOVE_BUTTON_STYLE,
-    CONVERT_BUTTON_STYLE,
+    get_app_colors,
+    get_button_style,
+    get_combo_style,
+    get_drop_label_style,
+    get_soft_button_style,
+    get_remove_button_style,
+    get_convert_button_style,
     apply_window_theme,
     make_card_container,
 )
@@ -30,7 +30,7 @@ class ImageDropLabel(QLabel):
         self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText("Arrastra aquí una imagen")
-        self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 180px;")
+        self.setStyleSheet(f"{get_drop_label_style()}min-height: 180px;")
         self.setAcceptDrops(True)
         self.image_path = None
         self.on_image_dropped = on_image_dropped
@@ -76,6 +76,7 @@ class ImageConverter(QWidget):
         self.setWindowTitle("Convertidor de Imágenes")
         self.setGeometry(100, 100, 480, 560)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         self.init_ui()
 
     def init_ui(self):
@@ -87,14 +88,14 @@ class ImageConverter(QWidget):
         back_btn = QPushButton("← Volver")
         back_btn.setFixedWidth(90)
         back_btn.clicked.connect(self.go_back)
-        back_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        back_btn.setStyleSheet(get_soft_button_style())
         top_layout.addWidget(back_btn)
         top_layout.addStretch()
         card_layout.addLayout(top_layout)
 
         self.label = QLabel("Selecciona o arrastra una imagen para convertir")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet(f"color: {APP_COLORS['text_main']}; font-size: 14pt; font-weight:600;")
+        self.label.setStyleSheet(f"color: {self._colors['text_main']}; font-size: 14pt; font-weight:600;")
         card_layout.addWidget(self.label)
 
         self.image_label = ImageDropLabel(self.on_image_dropped, self)
@@ -115,32 +116,32 @@ class ImageConverter(QWidget):
 
         self.select_button = QPushButton("Seleccionar Imagen")
         self.select_button.clicked.connect(self.select_image)
-        self.select_button.setStyleSheet(BUTTON_STYLE)
+        self.select_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_button)
 
         self.select_folder_button = QPushButton("Seleccionar Carpeta")
         self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.setStyleSheet(BUTTON_STYLE)
+        self.select_folder_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_folder_button)
 
         self.remove_button = QPushButton("Quitar todo")
         self.remove_button.clicked.connect(self.remove_image)
         self.remove_button.setEnabled(False)
-        self.remove_button.setStyleSheet(REMOVE_BUTTON_STYLE)
+        self.remove_button.setStyleSheet(get_remove_button_style())
         card_layout.addWidget(self.remove_button)
 
         self.convert_button = QPushButton("Convertir Archivo")
         self.convert_button.clicked.connect(self.convert_image)
         self.convert_button.setEnabled(False)
-        self.convert_button.setStyleSheet(CONVERT_BUTTON_STYLE)
+        self.convert_button.setStyleSheet(get_convert_button_style())
         card_layout.addWidget(self.convert_button)
 
-        self.from_combo.setStyleSheet(COMBO_STYLE)
-        self.to_combo.setStyleSheet(COMBO_STYLE)
+        self.from_combo.setStyleSheet(get_combo_style())
+        self.to_combo.setStyleSheet(get_combo_style())
         for i in range(combo_layout.count()):
             widget = combo_layout.itemAt(i).widget()
             if isinstance(widget, QLabel):
-                widget.setStyleSheet(f"color: {APP_COLORS['text_muted']};")
+                widget.setStyleSheet(f"color: {self._colors['text_muted']};")
 
         self.layout.addWidget(card)
         self.setLayout(self.layout)

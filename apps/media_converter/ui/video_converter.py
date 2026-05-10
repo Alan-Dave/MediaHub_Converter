@@ -8,14 +8,14 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from apps.media_converter.converters import conversion as Conversion
 from apps.media_converter.ui.ui_theme import (
-    APP_COLORS,
-    BUTTON_STYLE,
-    COMBO_STYLE,
-    DROP_LABEL_STYLE,
-    SOFT_BUTTON_STYLE,
-    REMOVE_BUTTON_STYLE,
-    CONVERT_BUTTON_STYLE,
-    FFMPEG_BUTTON_STYLE,
+    get_app_colors,
+    get_button_style,
+    get_combo_style,
+    get_drop_label_style,
+    get_soft_button_style,
+    get_remove_button_style,
+    get_convert_button_style,
+    get_ffmpeg_button_style,
     apply_window_theme,
     make_card_container,
 )
@@ -30,7 +30,7 @@ class FileDropLabel(QLabel):
         self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText(placeholder)
-        self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 140px;")
+        self.setStyleSheet(f"{get_drop_label_style()}min-height: 140px;")
         self.setAcceptDrops(True)
         self.file_path = None
         self.on_file_dropped = on_file_dropped
@@ -81,6 +81,7 @@ class VideoConverter(QWidget):
         self.setWindowTitle("Convertidor de Video")
         self.setGeometry(120, 120, 520, 480)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         self.init_ui()
 
     def init_ui(self):
@@ -92,19 +93,19 @@ class VideoConverter(QWidget):
         back_btn = QPushButton("← Volver")
         back_btn.setFixedWidth(90)
         back_btn.clicked.connect(self.go_back)
-        back_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        back_btn.setStyleSheet(get_soft_button_style())
         top_layout.addWidget(back_btn)
         top_layout.addStretch()
         ffmpeg_btn = QPushButton("Configurar FFmpeg")
         ffmpeg_btn.setFixedWidth(160)
         ffmpeg_btn.clicked.connect(self.show_ffmpeg_help)
-        ffmpeg_btn.setStyleSheet(FFMPEG_BUTTON_STYLE)
+        ffmpeg_btn.setStyleSheet(get_ffmpeg_button_style())
         top_layout.addWidget(ffmpeg_btn)
         card_layout.addLayout(top_layout)
 
         self.label = QLabel("Selecciona o arrastra un archivo de video para convertir")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet(f"color: {APP_COLORS['text_main']}; font-size: 14pt; font-weight:600;")
+        self.label.setStyleSheet(f"color: {self._colors['text_main']}; font-size: 14pt; font-weight:600;")
         card_layout.addWidget(self.label)
 
         self.file_label = FileDropLabel(
@@ -122,8 +123,8 @@ class VideoConverter(QWidget):
         self.from_combo = QComboBox()
         self.from_combo.addItems(VIDEO_FORMATS)
         self.from_combo.setEnabled(False)
-        self.from_combo.setStyleSheet(COMBO_STYLE)
-        from_lbl.setStyleSheet(f"color: {APP_COLORS['text_muted']};")
+        self.from_combo.setStyleSheet(get_combo_style())
+        from_lbl.setStyleSheet(f"color: {self._colors['text_muted']};")
         from_row.addWidget(from_lbl)
         from_row.addWidget(self.from_combo)
         from_row.addStretch()
@@ -132,7 +133,7 @@ class VideoConverter(QWidget):
         # ── Toggle: tipo de salida ──
         toggle_row = QHBoxLayout()
         dest_type_lbl = QLabel("Convertir a:")
-        dest_type_lbl.setStyleSheet(f"color: {APP_COLORS['text_muted']};")
+        dest_type_lbl.setStyleSheet(f"color: {self._colors['text_muted']};")
         toggle_row.addWidget(dest_type_lbl)
         toggle_row.addSpacing(10)
 
@@ -156,8 +157,8 @@ class VideoConverter(QWidget):
         self.to_lbl = QLabel("Formato de video:")
         self.to_combo = QComboBox()
         self.to_combo.addItems(VIDEO_FORMATS)
-        self.to_combo.setStyleSheet(COMBO_STYLE)
-        self.to_lbl.setStyleSheet(f"color: {APP_COLORS['text_muted']};")
+        self.to_combo.setStyleSheet(get_combo_style())
+        self.to_lbl.setStyleSheet(f"color: {self._colors['text_muted']};")
         to_row.addWidget(self.to_lbl)
         to_row.addWidget(self.to_combo)
         to_row.addStretch()
@@ -165,28 +166,28 @@ class VideoConverter(QWidget):
 
         self.select_button = QPushButton("Seleccionar Archivo")
         self.select_button.clicked.connect(self.select_file)
-        self.select_button.setStyleSheet(BUTTON_STYLE)
+        self.select_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_button)
 
         self.select_folder_button = QPushButton("Seleccionar Carpeta")
         self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.setStyleSheet(BUTTON_STYLE)
+        self.select_folder_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_folder_button)
 
         self.remove_button = QPushButton("Quitar todo")
         self.remove_button.clicked.connect(self.remove_file)
         self.remove_button.setEnabled(False)
-        self.remove_button.setStyleSheet(REMOVE_BUTTON_STYLE)
+        self.remove_button.setStyleSheet(get_remove_button_style())
         card_layout.addWidget(self.remove_button)
 
         self.convert_button = QPushButton("Convertir Archivo")
         self.convert_button.clicked.connect(self.convert_file)
         self.convert_button.setEnabled(False)
-        self.convert_button.setStyleSheet(CONVERT_BUTTON_STYLE)
+        self.convert_button.setStyleSheet(get_convert_button_style())
         card_layout.addWidget(self.convert_button)
 
-        self.from_combo.setStyleSheet(COMBO_STYLE)
-        self.to_combo.setStyleSheet(COMBO_STYLE)
+        self.from_combo.setStyleSheet(get_combo_style())
+        self.to_combo.setStyleSheet(get_combo_style())
 
         self.layout.addWidget(card)
         self.setLayout(self.layout)
@@ -247,7 +248,7 @@ class VideoConverter(QWidget):
             "padding:4px 16px; font-weight:bold; border:none; }"
         )
         _INACTIVE = (
-            f"QPushButton {{ background-color:#2b2b3b; color:{APP_COLORS['text_muted']}; "
+            f"QPushButton {{ background-color:#2b2b3b; color:{self._colors['text_muted']}; "
             "border-radius:6px; padding:4px 16px; border:2px solid #3a3a52; }} "
             "QPushButton:hover { background-color:#35354a; color:white; }"
         )

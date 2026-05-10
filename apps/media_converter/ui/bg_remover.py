@@ -11,12 +11,12 @@ from PyQt6.QtCore import Qt
 
 from apps.media_converter.converters.conversion import BackgroundRemoverLogic
 from apps.media_converter.ui.ui_theme import (
-    APP_COLORS,
-    BUTTON_STYLE,
-    DROP_LABEL_STYLE,
-    SOFT_BUTTON_STYLE,
-    REMOVE_BUTTON_STYLE,
-    CONVERT_BUTTON_STYLE,
+    get_app_colors,
+    get_button_style,
+    get_drop_label_style,
+    get_soft_button_style,
+    get_remove_button_style,
+    get_convert_button_style,
     apply_window_theme,
     make_card_container,
 )
@@ -27,7 +27,7 @@ class ImageDropLabel(QLabel):
         self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.setText("Arrastra aquí una imagen")
-        self.setStyleSheet(f"{DROP_LABEL_STYLE}min-height: 180px;")
+        self.setStyleSheet(f"{get_drop_label_style()}min-height: 180px;")
         self.setAcceptDrops(True)
         self.image_path = None
         self.on_image_dropped = on_image_dropped
@@ -73,6 +73,7 @@ class BackgroundRemoverUI(QWidget):
         self.setWindowTitle("Eliminador de Fondos Automático")
         self.setGeometry(100, 100, 480, 560)
         apply_window_theme(self)
+        self._colors = get_app_colors()
         
         self.image_path = None
         self.batch_files = []
@@ -88,20 +89,20 @@ class BackgroundRemoverUI(QWidget):
         back_btn = QPushButton("← Volver al Hub")
         back_btn.setFixedWidth(130)
         back_btn.clicked.connect(self.go_back)
-        back_btn.setStyleSheet(SOFT_BUTTON_STYLE)
+        back_btn.setStyleSheet(get_soft_button_style())
         top_layout.addWidget(back_btn)
         top_layout.addStretch()
         card_layout.addLayout(top_layout)
 
         self.label = QLabel("Selecciona o arrastra una imagen para quitarle el fondo")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet(f"color: {APP_COLORS['text_main']}; font-size: 13pt; font-weight:600;")
+        self.label.setStyleSheet(f"color: {self._colors['text_main']}; font-size: 13pt; font-weight:600;")
         self.label.setWordWrap(True)
         card_layout.addWidget(self.label)
 
         self.info_label = QLabel("La imagen resultante será un archivo PNG con fondo transparente.\nNota: El primer uso puede demorar mientras se descarga el modelo de IA.")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.info_label.setStyleSheet(f"color: {APP_COLORS['text_muted']}; font-size: 10pt;")
+        self.info_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-size: 10pt;")
         self.info_label.setWordWrap(True)
         card_layout.addWidget(self.info_label)
 
@@ -111,24 +112,24 @@ class BackgroundRemoverUI(QWidget):
         # Botones de Acción
         self.select_button = QPushButton("Seleccionar Imagen")
         self.select_button.clicked.connect(self.select_image)
-        self.select_button.setStyleSheet(BUTTON_STYLE)
+        self.select_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_button)
 
         self.select_folder_button = QPushButton("Seleccionar Carpeta")
         self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.setStyleSheet(BUTTON_STYLE)
+        self.select_folder_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_folder_button)
 
         self.remove_button = QPushButton("Quitar todo")
         self.remove_button.clicked.connect(self.remove_image)
         self.remove_button.setEnabled(False)
-        self.remove_button.setStyleSheet(REMOVE_BUTTON_STYLE)
+        self.remove_button.setStyleSheet(get_remove_button_style())
         card_layout.addWidget(self.remove_button)
 
         self.convert_button = QPushButton("Quitar Fondo")
         self.convert_button.clicked.connect(self.convert_image)
         self.convert_button.setEnabled(False)
-        self.convert_button.setStyleSheet(CONVERT_BUTTON_STYLE)
+        self.convert_button.setStyleSheet(get_convert_button_style())
         card_layout.addWidget(self.convert_button)
 
         self.layout.addWidget(card)
