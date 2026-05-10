@@ -269,6 +269,14 @@ class ImageEnhancerLogic:
     def _download_model_if_needed():
         import requests
         import zipfile
+        
+        # 1. Buscar primero en la carpeta local del proyecto
+        repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', '..'))
+        local_exe = os.path.join(repo_root, 'apps', 'models', 'realesrgan', 'realesrgan-ncnn-vulkan.exe')
+        if os.path.isfile(local_exe):
+            return local_exe
+        
+        # 2. Si no existe localmente, descargar a AppData
         appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
         models_dir = os.path.join(appdata_dir, "MediaHub", "models", "realesrgan")
         os.makedirs(models_dir, exist_ok=True)
@@ -292,7 +300,7 @@ class ImageEnhancerLogic:
         return exe_path
 
     @staticmethod
-    def mejorar_calidad(ruta_origen, ruta_destino):
+    def mejorar_calidad(ruta_origen, ruta_destino, model_name="realesrgan-x4plus", scale=4, use_tta=False):
         import subprocess
         import tempfile
         import shutil
@@ -320,8 +328,13 @@ class ImageEnhancerLogic:
                 exe_path,
                 "-i", input_tmp,
                 "-o", output_tmp,
-                "-s", "4"
+                "-s", str(scale),
+                "-n", model_name,
+                "-t", "400"
             ]
+            
+            if use_tta:
+                cmd.append("-x")
             
             # Hide console window on Windows
             startupinfo = None

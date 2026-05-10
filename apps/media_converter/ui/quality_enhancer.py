@@ -4,7 +4,7 @@ import datetime
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, 
-    QHBoxLayout, QProgressDialog
+    QHBoxLayout, QProgressDialog, QComboBox, QCheckBox, QFrame
 )
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
@@ -100,11 +100,48 @@ class QualityEnhancerUI(QWidget):
         self.label.setWordWrap(True)
         card_layout.addWidget(self.label)
 
-        self.info_label = QLabel("La imagen aumentará su resolución por 4x utilizando Inteligencia Artificial (EDSR).\nNota: Puede tardar unos minutos en completarse y el primer uso descargará el modelo.")
+        self.info_label = QLabel("La imagen aumentará su resolución utilizando Inteligencia Artificial (Real-ESRGAN).")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.info_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-size: 10pt;")
         self.info_label.setWordWrap(True)
         card_layout.addWidget(self.info_label)
+
+        # Settings Frame
+        settings_frame = QFrame()
+        settings_frame.setStyleSheet(f"background: {self._colors['card']}; border-radius: 8px; margin-top: 10px; margin-bottom: 10px;")
+        settings_layout = QVBoxLayout(settings_frame)
+        settings_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Model Selection
+        model_layout = QHBoxLayout()
+        model_label = QLabel("Tipo de Imagen:")
+        model_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold;")
+        self.combo_model = QComboBox()
+        self.combo_model.addItems(["Foto Real (Estándar)", "Ilustración / Anime", "Retrato Detallado"])
+        self.combo_model.setStyleSheet(f"background: {self._colors['bg']}; color: {self._colors['text_main']}; border: 1px solid {self._colors['border']}; border-radius: 4px; padding: 4px;")
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.combo_model)
+        settings_layout.addLayout(model_layout)
+        
+        # Scale and TTA Selection
+        scale_layout = QHBoxLayout()
+        scale_label = QLabel("Escala:")
+        scale_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold;")
+        self.combo_scale = QComboBox()
+        self.combo_scale.addItems(["2x", "3x", "4x"])
+        self.combo_scale.setCurrentText("4x")
+        self.combo_scale.setStyleSheet(f"background: {self._colors['bg']}; color: {self._colors['text_main']}; border: 1px solid {self._colors['border']}; border-radius: 4px; padding: 4px;")
+        scale_layout.addWidget(scale_label)
+        scale_layout.addWidget(self.combo_scale)
+        scale_layout.addStretch()
+        
+        self.check_tta = QCheckBox("Modo Ultra Detalle (TTA - Lento)")
+        self.check_tta.setStyleSheet(f"color: {self._colors['text_main']}; font-weight: bold;")
+        self.check_tta.setToolTip("Procesa la imagen 8 veces para eliminar ruido y bordes sierra. Ideal para resultados perfectos.")
+        scale_layout.addWidget(self.check_tta)
+        settings_layout.addLayout(scale_layout)
+        
+        card_layout.addWidget(settings_frame)
 
         self.image_label = ImageDropLabel(self.on_image_dropped, self)
         card_layout.addWidget(self.image_label)
@@ -219,6 +256,15 @@ class QualityEnhancerUI(QWidget):
         if not output_dir:
             return
 
+        model_map = {
+            "Foto Real (Estándar)": "realesrgan-x4plus",
+            "Ilustración / Anime": "realesrgan-x4plus-anime",
+            "Retrato Detallado": "realesrnet-x4plus"
+        }
+        selected_model = model_map.get(self.combo_model.currentText(), "realesrgan-x4plus")
+        scale = int(self.combo_scale.currentText().replace("x", ""))
+        use_tta = self.check_tta.isChecked()
+
         if self.batch_files:
             if len(self.batch_files) > 5:
                 folder_name = "Mejorado_Masivo_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -241,11 +287,14 @@ class QualityEnhancerUI(QWidget):
                 for idx, file_path in enumerate(self.batch_files, start=1):
                     nombre = os.path.splitext(os.path.basename(file_path))[0]
                     ext = os.path.splitext(file_path)[1]
-                    ruta_destino = os.path.join(output_dir, f"{nombre}_4x{ext}")
+                    ruta_destino = os.path.join(output_dir, f"{nombre}_{scale}x{ext}")
                     
                     resultado = ImageEnhancerLogic.mejorar_calidad(
                         ruta_origen=file_path,
-                        ruta_destino=ruta_destino
+                        ruta_destino=ruta_destino,
+                        model_name=selected_model,
+                        scale=scale,
+                        use_tta=use_tta
                     )
                     
                     if str(resultado).startswith("✅"):
@@ -276,7 +325,7 @@ class QualityEnhancerUI(QWidget):
 
         nombre = os.path.splitext(os.path.basename(self.image_path))[0]
         ext = os.path.splitext(self.image_path)[1]
-        ruta_destino = os.path.join(output_dir, f"{nombre}_4x{ext}")
+        ruta_destino = os.path.join(output_dir, f"{nombre}_{scale}x{ext}")
 
         progress = QProgressDialog("Mejorando calidad... Esto puede demorar bastante.", None, 0, 0, self)
         progress.setWindowTitle("Procesando")
@@ -287,7 +336,10 @@ class QualityEnhancerUI(QWidget):
         try:
             resultado = ImageEnhancerLogic.mejorar_calidad(
                 ruta_origen=self.image_path,
-                ruta_destino=ruta_destino
+                ruta_destino=ruta_destino,
+                model_name=selected_model,
+                scale=scale,
+                use_tta=use_tta
             )
         finally:
             progress.close()
