@@ -72,7 +72,7 @@ class LauncherWindow(QWidget):
         icons_layout.addLayout(make_block('AudioIcon.png', 'Audio', self.open_audio_converter))
         icons_layout.addLayout(make_block('VideoIcon.png', 'Video', self.open_video_converter))
         icons_layout.addLayout(make_block('Upscaler.png', 'Reescalar', self.open_image_rescaler))
-        icons_layout.addLayout(make_block('AudioIcon.png', 'Cortar Audio', self.open_audio_cut))
+        icons_layout.addLayout(make_block('audiocut.webp', 'Cortar Audio', self.open_audio_cut))
 
         layout.addLayout(icons_layout)
 
