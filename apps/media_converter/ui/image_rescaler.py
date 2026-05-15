@@ -240,10 +240,17 @@ class ImageRescaler(QWidget):
             self.spin_width.blockSignals(False)
 
     def go_back(self):
-        from apps.media_converter.ui.index import LauncherWindow
-        self.index_window = LauncherWindow()
-        self.index_window.show()
-        self.close()
+        if hasattr(self, "parent_navigator") and self.parent_navigator:
+            self.parent_navigator.go_home()
+        else:
+            from core.ui.hub_window import HubWindow
+            try:
+                from apps.media_converter.ui.index import LauncherWindow
+                self.index_window = LauncherWindow()
+            except:
+                self.index_window = HubWindow()
+            self.index_window.show()
+            self.close()
 
     def update_original_dimensions(self, file_path):
         reader = QImageReader(file_path)
@@ -398,9 +405,15 @@ class ImageRescaler(QWidget):
                     f"Reescalados: {converted}\nFallidos: {failed}",
                 )
             try:
-                os.startfile(output_dir)
-            except AttributeError:
-                subprocess.Popen(["xdg-open", output_dir])
+                from core.ui.result_viewer import ResultViewerDialog
+                viewer = ResultViewerDialog(output_dir, self)
+                viewer.exec()
+            except Exception:
+                try:
+                    os.startfile(output_dir)
+                except AttributeError:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", output_dir])
             return
 
         if not self.image_path:

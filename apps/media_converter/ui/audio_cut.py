@@ -696,7 +696,14 @@ class AudioCutUI(QMainWindow):
         QMessageBox.critical(self, "Error", f"Se produjo un error:\n{err_msg}")
 
     def go_back(self):
-        from apps.media_converter.ui.index import LauncherWindow
-        self.launcher = LauncherWindow()
-        self.launcher.show()
-        self.close()
+        if hasattr(self, "parent_navigator") and self.parent_navigator:
+            self.parent_navigator.go_home()
+        else:
+            from core.ui.hub_window import HubWindow
+            try:
+                from apps.media_converter.ui.index import LauncherWindow
+                self.index_window = LauncherWindow()
+            except:
+                self.index_window = HubWindow()
+            self.index_window.show()
+            self.close()

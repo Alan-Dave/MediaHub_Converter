@@ -1,15 +1,18 @@
-# 🎛️ Media Hub — v1.4
+# 🎛️ Media Hub — v1.5
 
 Aplicación de escritorio modular hecha en Python (PyQt6) que agrupa múltiples herramientas de conversión y edición impulsadas por Inteligencia Artificial y utilidades multimedia avanzadas. Diseñada para ser **rápida, privada** (todo el procesamiento es local) y **libre de anuncios**.
 
 ---
 
-## ✨ Novedades en v1.4
+## ✨ Novedades en v1.5
 
-- 🌙 **Modo Oscuro Global** — Toggle en el Hub principal que aplica el tema a todas las micro-apps en tiempo real.
-- ✂️ **Cortador de Audio Avanzado** — Editor multipista en tiempo real con previsualización dinámica de fades y saltos.
-- 🖼️ **Descarga de imágenes** en el Link Converter — soporte para descargar imágenes directas y desde plataformas compatibles.
-- 🔍 **Detección inteligente de contenido** — El Link Converter identifica automáticamente si un enlace apunta a video, audio o imagen, y bloquea las opciones incompatibles.
+- 🚀 **Aceleración por Hardware (GPU):** Ahora el motor detecta automáticamente tarjetas de video NVIDIA o AMD para usar NVENC / AMF, logrando conversiones de video hasta 10 veces más rápidas.
+- 🖼️ **Single-Page Application (SPA):** La navegación ha sido reescrita por completo. Ahora todas las ventanas fluyen de manera anidada (`QStackedWidget`), evitando cierres y aperturas constantes de nuevas ventanas.
+- 👆 **Menú Principal Personalizable:** Las tarjetas del Hub Principal soportan Drag and Drop (Arrastrar y Soltar), permitiéndote ordenar las herramientas como prefieras. Se guardará tu preferencia para futuras sesiones.
+- 📂 **Visor de Resultados Integrado:** En lugar de abrir la carpeta de Windows, ahora se despliega una agradable galería nativa para visualizar las miniaturas del contenido que acabas de generar.
+- 💬 **Generador de Subtítulos con IA:** Nueva herramienta que usa `whisper.cpp` para transcribir audio y video localmente a altísima velocidad.
+- © **Marca de Agua Masiva:** Herramienta para aplicar logotipos e identidades visuales a colecciones enteras de imágenes y videos.
+- ☁️ **GitHub CI/CD:** El proyecto cuenta con un flujo de trabajo para compilar `.exe` automáticamente en la nube.
 
 ---
 
@@ -17,60 +20,33 @@ Aplicación de escritorio modular hecha en Python (PyQt6) que agrupa múltiples 
 
 ### 1. 🎞️ Multimedia Converter
 Conversión profesional de archivos multimedia en modo individual o por lotes.
-
 | Módulo | Formatos soportados |
 |---|---|
 | **Audio** | `mp3`, `wav`, `flac`, `ogg`, `m4a` |
 | **Video** | `mp4`, `mkv`, `avi`, `mov`, `webm` + extracción a `mp3` |
 | **Imágenes** | `jpg`, `png`, `webp`, `gif`, `bmp`, `tiff` y más |
-| **Reescalador** | Redimensión por píxeles o porcentaje, con opción de mantener relación de aspecto |
+| **Reescalador** | Redimensión por píxeles o porcentaje |
 
----
+### 2. 💬 Subtitle Generator (Whisper IA)
+Extrae subtítulos precisos (`.srt`) directamente desde cualquier pista de video o audio usando los potentes modelos de OpenAI ejecutados en tu propio equipo.
 
-### 2. 🔗 Link Converter (Downloader Inteligente)
-Descarga contenido multimedia desde redes sociales y URLs directas.
+### 3. © Bulk Watermark Tool
+Aplica marcas de agua transparentes sobre imágenes y videos en lote de manera inteligente con escalado adaptativo, asegurando que tu logotipo luzca perfecto independientemente de la resolución original.
 
-- **Plataformas soportadas:** YouTube, TikTok, Instagram, X (Twitter), Facebook, Twitch, Vimeo, SoundCloud y cientos más vía `yt-dlp`.
-- **Detección automática de tipo de contenido:** Al pegar un enlace, el sistema identifica si es video, audio o imagen y activa solo las opciones compatibles.
-  - URL de YouTube → habilita **Video** y **Audio** (deshabilita imagen)
-  - URL de SoundCloud → habilita solo **Audio**
-  - URL directa a `.jpg/.png/...` → habilita solo **Imagen**
-  - Instagram / X → permite los tres tipos
-- **Formatos de descarga:**
-  - Video: `mp4`, `mkv`, `webm`, `avi`
-  - Audio: `mp3`, `m4a`, `flac`, `ogg`, `wav`
-  - Imagen: `jpg`, `png`, `webp`, `gif`, `bmp`
-- **Selección de calidad de video:** Mejor disponible, 1080p, 720p, 480p, 360p.
-- Motor basado en `yt-dlp` para video/audio y descarga directa `urllib` para imágenes.
+### 4. 🔗 Link Converter (Downloader Inteligente)
+Descarga video, audio y fotografías desde redes sociales (YouTube, TikTok, Instagram, X) con detección de tipo de contenido automática impulsada por `yt-dlp`.
 
----
+### 5. 📄 Document Converter
+Conversión de PDF a Word, PowerPoint, Excel e imágenes, además del soporte opcional de Word a PDF de alta fidelidad empleando `comtypes`.
 
-### 3. 📄 Document Converter
-- **Word → PDF:** Conversión con alta fidelidad usando Microsoft Word (requiere Word instalado).
-- **PDF → Word:** Extrae y convierte contenido PDF a documentos editables `.docx`.
-- **Procesamiento por lotes:** Convierte múltiples archivos de una vez.
+### 6. 🤖 Background Eraser (IA)
+Eliminación de fondos de fotografías por lote impulsada por Inteligencia Artificial (`rembg` + `u2net`) con salida en canal alfa `.png`.
 
----
+### 7. ✨ Quality Enhancer — Real-ESRGAN (IA)
+Súper Resolución 4x para amplificar fotografías borrosas y limpiar artefactos, impulsada por el avanzado motor binario `Real-ESRGAN`.
 
-### 4. 🤖 Background Eraser (IA)
-- Eliminación de fondos impulsada por Inteligencia Artificial (`rembg` + `u2net`).
-- Procesa sujetos y objetos complejos con un solo clic.
-- Salida en `.png` con canal alfa (transparencia total).
-
----
-
-### 5. ✨ Quality Enhancer — Real-ESRGAN (IA)
-- **Súper Resolución 4x:** Amplía imágenes sin perder nitidez.
-- **Restauración:** Elimina ruido y artefactos de compresión (ideal para fotos antiguas).
-- Motor **Real-ESRGAN** para resultados de grado profesional.
-
----
-
-### 6. ✂️ Advanced Audio Cut
-- **Edición Profesional:** Corta o recorta archivos de audio visualizando su espectro (Waveform) interactivo.
-- **Reproductor Integrado:** Previsualiza el resultado en tiempo real (con búsqueda via arrastre o clic derecho) sin necesidad de renderizar previamente.
-- **Efectos Dinámicos:** Aplica *Fade In* y *Fade Out* (hasta 10s) con previsualización de volumen en vivo.
-- **Modos de Corte:** Mantén la selección (Trim) o elimina el centro (Cut), escuchando los saltos en vivo.
+### 8. ✂️ Advanced Audio Cut
+Corta o recorta archivos de audio visualizando el waveform interactivo, con soporte en vivo para aplicar Fade In y Fade Out.
 
 ---
 
@@ -79,10 +55,10 @@ Descarga contenido multimedia desde redes sociales y URLs directas.
 | Requisito | Detalle |
 |---|---|
 | **Python** | 3.11 o superior |
-| **FFmpeg** | Esencial para conversión de audio y video |
+| **FFmpeg** | Esencial para conversión de audio, video y aceleración por hardware |
 | **Microsoft Word** | Solo para conversión Word → PDF (opcional) |
-| **Conexión a Internet** | Para el Link Converter y la descarga de modelos de IA (primera vez) |
-| **Sistema Operativo** | Windows 10/11 (probado); compatible con Linux/macOS con ajustes menores |
+| **Conexión a Internet** | Solo necesaria para Link Converter y descarga inicial de modelos IA |
+| **Sistema Operativo** | Windows 10/11 |
 
 ---
 
@@ -105,11 +81,10 @@ python -m venv venv
 pip install -r requirements.txt
 ```
 
-### 4. Instalar FFmpeg (Windows — recomendado)
+### 4. Instalar FFmpeg (Windows)
 ```powershell
 winget install "FFmpeg (Essentials Build)"
 ```
-> Alternativamente, descarga el ejecutable desde [ffmpeg.org](https://ffmpeg.org/download.html) y agrégalo al `PATH`.
 
 ---
 
@@ -119,12 +94,5 @@ winget install "FFmpeg (Essentials Build)"
 python main.py
 ```
 
----
-
-## 💡 Notas Adicionales
-
-- **Modelos de IA:** La primera vez que abras el *Quality Enhancer* o el *Background Eraser*, el sistema descargará automáticamente los modelos de IA (~180 MB). Este proceso ocurre una sola vez.
-- **Modo Oscuro:** El estado del tema se mantiene durante la sesión. Se puede añadir persistencia entre reinicios en una futura versión.
-- **Privacidad:** Todo el procesamiento de archivos (conversión, IA, reescalado) ocurre de forma completamente local. Tus archivos nunca suben a ningún servidor.
-- **FFmpeg:** Si el sistema no reconoce FFmpeg, puedes configurar la ruta manualmente en las variables de entorno del sistema o definir la variable `FFMPEG_PATH`. El botón "Configurar FFmpeg" en los convertidores de audio y video explica los pasos.
-- **Link Converter + Imágenes:** La descarga de imágenes funciona directamente solo con URLs que apunten a un archivo de imagen (`.jpg`, `.png`, etc.). Para imágenes embebidas en publicaciones de redes sociales, el resultado puede variar.
+## ⚙️ Compilación Autónoma (GitHub Actions)
+El repositorio viene con un script automatizado. Cada vez que hagas `push` de un tag (`v1.x.x`), los servidores de GitHub Actions construirán el instalador del *Media Hub* y lo subirán directamente a la pestaña **Releases**.

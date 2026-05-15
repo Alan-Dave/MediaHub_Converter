@@ -4,12 +4,12 @@ import datetime
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, 
-    QHBoxLayout, QComboBox, QCheckBox, QFrame
+    QHBoxLayout, QComboBox, QFrame
 )
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
 
-from apps.media_converter.converters.conversion import BackgroundRemoverLogic
+from apps.media_converter.converters.conversion import SubtitleGeneratorLogic
 from apps.media_converter.ui.ui_theme import (
     get_app_colors,
     get_button_style,
@@ -21,17 +21,16 @@ from apps.media_converter.ui.ui_theme import (
     make_card_container,
 )
 
-class ImageDropLabel(QLabel):
-    def __init__(self, on_image_dropped, parent=None):
+class MediaDropLabel(QLabel):
+    def __init__(self, on_media_dropped, parent=None):
         super().__init__(parent)
         self.main_window = parent
         self.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.setText("Arrastra aquí una imagen")
+        self.setText("Arrastra aquí tu Video o Audio")
         self.setStyleSheet(f"{get_drop_label_style()}min-height: 180px;")
         self.setAcceptDrops(True)
-        self.image_path = None
-        self.on_image_dropped = on_image_dropped
-        self.allowed_extensions = ('.png', '.jpg', '.jpeg', '.bmp', '.webp', '.tiff')
+        self.on_media_dropped = on_media_dropped
+        self.allowed_extensions = ('.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv', '.mp3', '.wav', '.m4a', '.ogg')
 
     def dragEnterEvent(self, event):
         if event.mimeData().hasUrls():
@@ -55,9 +54,9 @@ class ImageDropLabel(QLabel):
             ]
             invalid_count = len(event.mimeData().urls()) - len(valid_files)
             if valid_files:
-                self.on_image_dropped(valid_files)
+                self.on_media_dropped(valid_files)
             if invalid_count > 0:
-                QMessageBox.warning(self, "Formato no soportado", f"{invalid_count} archivo(s) no son imágenes válidas y fueron ignorados.")
+                QMessageBox.warning(self, "Formato no soportado", f"{invalid_count} archivo(s) no son válidos y fueron ignorados.")
         else:
             event.ignore()
 
@@ -67,17 +66,15 @@ class ImageDropLabel(QLabel):
                 self.main_window.open_batch_manager()
 
 
-class BackgroundRemoverUI(QWidget):
+class SubtitleGeneratorUI(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Eliminador de Fondos Automático")
+        self.setWindowTitle("Generador de Subtítulos (IA)")
         self.setGeometry(100, 100, 480, 560)
         apply_window_theme(self)
         self._colors = get_app_colors()
         
-        self.image_path = None
         self.batch_files = []
-        
         self.init_ui()
 
     def init_ui(self):
@@ -94,69 +91,66 @@ class BackgroundRemoverUI(QWidget):
         top_layout.addStretch()
         card_layout.addLayout(top_layout)
 
-        self.label = QLabel("Selecciona o arrastra una imagen para quitarle el fondo")
+        self.label = QLabel("Selecciona un archivo multimedia para generar subtítulos (.srt)")
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet(f"color: {self._colors['text_main']}; font-size: 13pt; font-weight:600;")
+        self.label.setStyleSheet(f"color: {{self._colors['text_main']}}; font-size: 13pt; font-weight:600;")
         self.label.setWordWrap(True)
         card_layout.addWidget(self.label)
 
-        self.info_label = QLabel("La imagen resultante será un archivo PNG con fondo transparente.\nNota: El primer uso puede demorar mientras se descarga el modelo de IA.")
+        self.info_label = QLabel("Utiliza Whisper AI para transcribir audios y videos con altísima precisión.")
         self.info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.info_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-size: 10pt;")
+        self.info_label.setStyleSheet(f"color: {{self._colors['text_muted']}}; font-size: 10pt;")
         self.info_label.setWordWrap(True)
         card_layout.addWidget(self.info_label)
 
         # Settings Frame
         settings_frame = QFrame()
-        settings_frame.setStyleSheet(f"background: {self._colors['card']}; border-radius: 8px; margin-top: 10px; margin-bottom: 10px;")
+        settings_frame.setStyleSheet(f"background: {{self._colors['card']}}; border-radius: 8px; margin-top: 10px; margin-bottom: 10px;")
         settings_layout = QVBoxLayout(settings_frame)
         settings_layout.setContentsMargins(15, 15, 15, 15)
         
         # Model Selection
         model_layout = QHBoxLayout()
-        model_label = QLabel("Modelo de IA:")
-        model_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold;")
+        model_label = QLabel("Modelo IA:")
+        model_label.setStyleSheet(f"color: {{self._colors['text_muted']}}; font-weight: bold;")
         self.combo_model = QComboBox()
-        self.combo_model.addItems(["Estándar (u2net)", "Personas (u2net_human_seg)", "Objetos/Ropa (u2net_cloth_seg)", "Preciso/Lento (isnet-general-use)"])
-        self.combo_model.setCurrentText("Estándar (u2net)")
-        self.combo_model.setStyleSheet(f"background: {self._colors['bg']}; color: {self._colors['text_main']}; border: 1px solid {self._colors['border']}; border-radius: 4px; padding: 4px;")
+        self.combo_model.addItems(["Tiny (Rápido)", "Base (Balanceado)", "Small (Preciso)"])
+        self.combo_model.setCurrentText("Base (Balanceado)")
+        self.combo_model.setStyleSheet(f"background: {{self._colors['bg']}}; color: {{self._colors['text_main']}}; border: 1px solid {{self._colors['border']}}; border-radius: 4px; padding: 4px;")
         model_layout.addWidget(model_label)
         model_layout.addWidget(self.combo_model)
         settings_layout.addLayout(model_layout)
         
-        # Alpha Matting
-        alpha_layout = QHBoxLayout()
-        self.check_alpha = QCheckBox("Recorte Fino (Alpha Matting)")
-        self.check_alpha.setStyleSheet(f"color: {self._colors['text_main']}; font-weight: bold;")
-        self.check_alpha.setToolTip("Mejora el recorte de pelo, pelaje o bordes semitransparentes (como vidrios o fuego).")
-        alpha_layout.addWidget(self.check_alpha)
-        alpha_layout.addStretch()
-        settings_layout.addLayout(alpha_layout)
+        # Language Selection
+        lang_layout = QHBoxLayout()
+        lang_label = QLabel("Idioma:")
+        lang_label.setStyleSheet(f"color: {{self._colors['text_muted']}}; font-weight: bold;")
+        self.combo_lang = QComboBox()
+        self.combo_lang.addItems(["Automático", "es (Español)", "en (Inglés)"])
+        self.combo_lang.setStyleSheet(f"background: {{self._colors['bg']}}; color: {{self._colors['text_main']}}; border: 1px solid {{self._colors['border']}}; border-radius: 4px; padding: 4px;")
+        lang_layout.addWidget(lang_label)
+        lang_layout.addWidget(self.combo_lang)
+        settings_layout.addLayout(lang_layout)
         
         card_layout.addWidget(settings_frame)
 
-        self.image_label = ImageDropLabel(self.on_image_dropped, self)
-        card_layout.addWidget(self.image_label)
+        self.media_label = MediaDropLabel(self.on_media_dropped, self)
+        card_layout.addWidget(self.media_label)
 
         # Botones de Acción
-        self.select_button = QPushButton("Seleccionar Imagen")
-        self.select_button.clicked.connect(self.select_image)
+        self.select_button = QPushButton("Seleccionar Archivos")
+        self.select_button.clicked.connect(self.select_media)
         self.select_button.setStyleSheet(get_button_style())
         card_layout.addWidget(self.select_button)
 
-        self.select_folder_button = QPushButton("Seleccionar Carpeta")
-        self.select_folder_button.clicked.connect(self.select_folder)
-        self.select_folder_button.setStyleSheet(get_button_style())
-        card_layout.addWidget(self.select_folder_button)
-
         self.remove_button = QPushButton("Quitar todo")
-        self.remove_button.clicked.connect(self.remove_image)
+        self.remove_button.clicked.connect(self.remove_media)
         self.remove_button.setEnabled(False)
         self.remove_button.setStyleSheet(get_remove_button_style())
         card_layout.addWidget(self.remove_button)
 
-        self.convert_button = QPushButton("Quitar Fondo")
-        self.convert_button.clicked.connect(self.convert_image)
+        self.convert_button = QPushButton("Generar Subtítulos")
+        self.convert_button.clicked.connect(self.generate_subtitles)
         self.convert_button.setEnabled(False)
         self.convert_button.setStyleSheet(get_convert_button_style())
         card_layout.addWidget(self.convert_button)
@@ -172,13 +166,13 @@ class BackgroundRemoverUI(QWidget):
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 self.batch_files = dialog.get_files()
                 if len(self.batch_files) == 0:
-                    self.remove_image()
+                    self.remove_media()
                 elif len(self.batch_files) == 1:
-                    self.image_label.clear()
-                    self.image_label.setText(os.path.basename(self.batch_files[0]))
+                    self.media_label.clear()
+                    self.media_label.setText(os.path.basename(self.batch_files[0]))
                 else:
-                    self.image_label.clear()
-                    self.image_label.setText(f"{len(self.batch_files)} imágenes seleccionadas")
+                    self.media_label.clear()
+                    self.media_label.setText(f"{len(self.batch_files)} archivos seleccionados")
 
     def go_back(self):
         from core.ui.hub_window import HubWindow
@@ -186,18 +180,16 @@ class BackgroundRemoverUI(QWidget):
         self.hub_window.show()
         self.close()
 
-    def select_image(self):
+    def select_media(self):
         file_dialog = QFileDialog()
-        file_paths, _ = file_dialog.getOpenFileNames(self, "Seleccionar Imágenes", "", "Imágenes (*.png *.jpg *.jpeg *.bmp *.webp *.tiff)")
+        file_paths, _ = file_dialog.getOpenFileNames(self, "Seleccionar Multimedia", "", "Multimedia (*.mp4 *.mkv *.avi *.mov *.webm *.mp3 *.wav *.m4a *.ogg)")
         if file_paths:
-            self.image_path = None
             for fp in file_paths:
                 if fp not in self.batch_files:
                     self.batch_files.append(fp)
             self._refresh_label()
 
-    def on_image_dropped(self, file_paths):
-        self.image_path = None
+    def on_media_dropped(self, file_paths):
         for fp in file_paths:
             if fp not in self.batch_files:
                 self.batch_files.append(fp)
@@ -207,59 +199,47 @@ class BackgroundRemoverUI(QWidget):
         if not self.batch_files:
             return
         if len(self.batch_files) == 1:
-            fp = self.batch_files[0]
-            pixmap = QPixmap(fp)
-            self.image_label.setPixmap(pixmap.scaled(250, 250, Qt.AspectRatioMode.KeepAspectRatio))
+            self.media_label.clear()
+            self.media_label.setText(os.path.basename(self.batch_files[0]))
         else:
-            self.image_label.clear()
-            self.image_label.setText(f"{len(self.batch_files)} imágenes seleccionadas")
+            self.media_label.clear()
+            self.media_label.setText(f"{len(self.batch_files)} archivos seleccionados")
         self.convert_button.setEnabled(True)
         self.remove_button.setEnabled(True)
 
-    def select_folder(self):
-        folder_path = QFileDialog.getExistingDirectory(self, "Seleccionar Carpeta de Imágenes")
-        if not folder_path:
-            return
-        valid_exts = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff"}
-        self.image_path = None
-        for name in os.listdir(folder_path):
-            file_path = os.path.join(folder_path, name)
-            if os.path.isfile(file_path) and os.path.splitext(name)[1].lower() in valid_exts:
-                if file_path not in self.batch_files:
-                    self.batch_files.append(file_path)
-        if not self.batch_files:
-            QMessageBox.warning(self, "Sin archivos", "No se encontraron imágenes compatibles en la carpeta.")
-            return
-        self._refresh_label()
-
-    def remove_image(self):
-        self.image_path = None
+    def remove_media(self):
         self.batch_files = []
-        self.image_label.clear()
-        self.image_label.setText("Arrastra aquí una imagen")
+        self.media_label.clear()
+        self.media_label.setText("Arrastra aquí tu Video o Audio")
         self.convert_button.setEnabled(False)
         self.remove_button.setEnabled(False)
 
     def choose_output_folder(self):
         return QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de salida")
 
-    def convert_image(self):
+    def generate_subtitles(self):
         output_dir = self.choose_output_folder()
         if not output_dir:
             return
 
         model_map = {
-            "Estándar (u2net)": "u2net",
-            "Personas (u2net_human_seg)": "u2net_human_seg",
-            "Objetos/Ropa (u2net_cloth_seg)": "u2net_cloth_seg",
-            "Preciso/Lento (isnet-general-use)": "isnet-general-use"
+            "Tiny (Rápido)": "tiny",
+            "Base (Balanceado)": "base",
+            "Small (Preciso)": "small"
         }
-        selected_model = model_map.get(self.combo_model.currentText(), "u2net")
-        alpha_matting = self.check_alpha.isChecked()
+        selected_model = model_map.get(self.combo_model.currentText(), "base")
+        
+        lang_text = self.combo_lang.currentText()
+        if lang_text == "Automático":
+            language = "auto"
+        elif "es" in lang_text:
+            language = "es"
+        else:
+            language = "en"
 
         if self.batch_files:
             if len(self.batch_files) > 5:
-                folder_name = "Quitar_Fondo_Masivo_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+                folder_name = "Subtitulos_Masivos_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
                 output_dir = os.path.join(output_dir, folder_name)
                 if not os.path.exists(output_dir):
                     os.makedirs(output_dir)
@@ -270,7 +250,7 @@ class BackgroundRemoverUI(QWidget):
             was_cancelled = False
             
             from core.ui.advanced_progress import AdvancedProgressDialog
-            progress = AdvancedProgressDialog("Quitando fondos...", total, self)
+            progress = AdvancedProgressDialog("Generando Subtítulos...", total, self)
             progress.show()
             QApplication.processEvents()
 
@@ -286,13 +266,13 @@ class BackgroundRemoverUI(QWidget):
                         break
                         
                     nombre = os.path.splitext(os.path.basename(file_path))[0]
-                    ruta_destino = os.path.join(output_dir, f"{nombre}_nobg.png")
+                    ruta_destino = os.path.join(output_dir, f"{nombre}.srt")
                     
-                    resultado = BackgroundRemoverLogic.quitar_fondo(
+                    resultado = SubtitleGeneratorLogic.generar_subtitulos(
                         ruta_origen=file_path,
                         ruta_destino=ruta_destino,
-                        model_name=selected_model,
-                        alpha_matting=alpha_matting
+                        model_size=selected_model,
+                        language=language
                     )
                     
                     if str(resultado).startswith("✅"):
@@ -300,7 +280,7 @@ class BackgroundRemoverUI(QWidget):
                     else:
                         failed += 1
                         
-                    progress.setLabelText(f"Quitando fondos... ({idx}/{total})")
+                    progress.setLabelText(f"Transcribiendo... ({idx}/{total})")
                     progress.setValue(idx)
                     QApplication.processEvents()
             finally:
@@ -309,8 +289,8 @@ class BackgroundRemoverUI(QWidget):
             if was_cancelled:
                 QMessageBox.warning(
                     self,
-                    "Conversión Cancelada",
-                    f"Proceso cancelado por el usuario.\nSe procesaron {converted} imágenes de {total} antes de cancelar."
+                    "Proceso Cancelado",
+                    f"Proceso cancelado por el usuario.\nSe completaron {converted} de {total} archivos."
                 )
             else:
                 QMessageBox.information(
@@ -328,40 +308,3 @@ class BackgroundRemoverUI(QWidget):
                 except AttributeError:
                     import subprocess
                     subprocess.Popen(["xdg-open", output_dir])
-            return
-
-        if not self.image_path:
-            QMessageBox.warning(self, "Advertencia", "Por favor selecciona una imagen primero.")
-            return
-
-        nombre = os.path.splitext(os.path.basename(self.image_path))[0]
-        ruta_destino = os.path.join(output_dir, f"{nombre}_nobg.png")
-
-        from core.ui.advanced_progress import AdvancedProgressDialog
-        progress = AdvancedProgressDialog("Quitando fondo...", 1, self)
-        progress.show()
-        QApplication.processEvents()
-        try:
-            resultado = BackgroundRemoverLogic.quitar_fondo(
-                ruta_origen=self.image_path,
-                ruta_destino=ruta_destino,
-                model_name=selected_model,
-                alpha_matting=alpha_matting
-            )
-        finally:
-            progress.close()
-
-        if "Error" in resultado:
-            QMessageBox.warning(self, "Error", resultado)
-        else:
-            QMessageBox.information(self, "Proceso Completado", resultado)
-            try:
-                os.startfile(output_dir)
-            except AttributeError:
-                subprocess.Popen(['xdg-open', output_dir])
-
-if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    window = BackgroundRemoverUI()
-    window.show()
-    sys.exit(app.exec())

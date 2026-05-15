@@ -1,0 +1,56 @@
+name: Build and Release Media Hub
+
+on:
+  push:
+    tags:
+      - 'v*' # Trigger solo cuando creas un tag como v1.0.0
+  workflow_dispatch: # Permite ejecutar el build manualmente desde GitHub
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pyinstaller
+          pip install -r requirements.txt
+
+      - name: Build Executable with PyInstaller
+        run: pyinstaller main.spec
+
+      - name: Build Installer with Inno Setup
+        uses: Minionguyjpro/Inno-Setup-Action@v1.2.2
+        with:
+          path: Media-Hub.iss
+
+      - name: Generate Release Tag Name
+        id: tag_name
+        run: |
+          if ("${{ github.ref }}" -match "refs/tags/") {
+            echo "TAG=${{ github.ref_name }}" >> $env:GITHUB_OUTPUT
+          } else {
+            $date = Get-Date -Format "yyyyMMdd-HHmm"
+            echo "TAG=v$date" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag_name.outputs.TAG }}
+          name: Media Hub Release ${{ steps.tag_name.outputs.TAG }}
+          files: |
+            Output/*.exe
+            dist/*.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

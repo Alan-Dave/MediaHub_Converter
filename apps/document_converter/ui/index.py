@@ -1,6 +1,6 @@
 import os
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QFrame
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QFrame, QStackedWidget
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
@@ -26,7 +26,16 @@ class DocumentLauncherWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        root_layout = QVBoxLayout()
+        # Configurar Stacked Widget
+        self.stacked_widget = QStackedWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.stacked_widget)
+        self.setLayout(main_layout)
+
+        # Construir la página del menú
+        self.menu_page = QWidget()
+        root_layout = QVBoxLayout(self.menu_page)
         root_layout.setContentsMargins(28, 24, 28, 24)
         root_layout.setSpacing(0)
         main_card, layout = make_card_container()
@@ -122,11 +131,14 @@ class DocumentLauncherWindow(QWidget):
         
         footer.addStretch()
 
-        layout.addStretch()
         layout.addLayout(footer)
 
         root_layout.addWidget(main_card)
-        self.setLayout(root_layout)
+        self.stacked_widget.addWidget(self.menu_page)
+        self.loaded_pages = {}
+
+    def go_home(self):
+        self.stacked_widget.setCurrentWidget(self.menu_page)
 
     def dummy_action(self, option):
         from apps.document_converter.ui.converter_window import DocumentConverterWindow
@@ -135,7 +147,6 @@ class DocumentLauncherWindow(QWidget):
             from_str = parts[0].strip().lower()
             to_str = parts[1].strip().lower()
             
-            # Mapeo de nombres amigables a extensiones reales
             ext_map = {
                 "word": "docx",
                 "powerpoint": "pptx",
@@ -145,9 +156,14 @@ class DocumentLauncherWindow(QWidget):
             from_ext = ext_map.get(from_str, from_str)
             to_ext = ext_map.get(to_str, to_str)
             
-            self.converter_window = DocumentConverterWindow(from_ext=from_ext, to_ext=to_ext, title=f"Convertir {option}")
-            self.converter_window.show()
-            self.close()
+            tool_id = f"doc_{from_ext}_to_{to_ext}"
+            if tool_id not in self.loaded_pages:
+                tool_widget = DocumentConverterWindow(from_ext=from_ext, to_ext=to_ext, title=f"Convertir {option}")
+                tool_widget.parent_navigator = self
+                self.stacked_widget.addWidget(tool_widget)
+                self.loaded_pages[tool_id] = tool_widget
+                
+            self.stacked_widget.setCurrentWidget(self.loaded_pages[tool_id])
         else:
             QMessageBox.information(self, "Error", "Acción no reconocida.")
 

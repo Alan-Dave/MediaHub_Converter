@@ -280,8 +280,10 @@ class ImageEnhancerLogic:
         if os.path.isfile(local_exe):
             return local_exe
         
-        # 2. Si no existe localmente, descargar a AppData
-        appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
+        # 2. Si no existe localmente, descargar a ProgramData para evitar errores de espacios en rutas (bug de _wfopen en realesrgan)
+        appdata_dir = os.environ.get('ProgramData')
+        if not appdata_dir:
+            appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
         models_dir = os.path.join(appdata_dir, "MediaHub", "models", "realesrgan")
         os.makedirs(models_dir, exist_ok=True)
         exe_path = os.path.join(models_dir, "realesrgan-ncnn-vulkan.exe")
@@ -346,7 +348,10 @@ class ImageEnhancerLogic:
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
 
-            subprocess.run(cmd, check=True, startupinfo=startupinfo)
+            try:
+                subprocess.run(cmd, check=True, startupinfo=startupinfo, capture_output=True, text=True)
+            except subprocess.CalledProcessError as e:
+                raise Exception(f"El motor de IA falló: {e.stderr.strip() if e.stderr else str(e)}")
             
             if os.path.exists(output_tmp):
                 shutil.copy2(output_tmp, ruta_destino)
@@ -434,13 +439,39 @@ class VideoFormats:
             stderr = e.stderr.decode(errors='replace') if isinstance(e.stderr, (bytes, bytearray)) else str(e.stderr)
             return False, f"⚠️ Error en ffmpeg: {stderr}"
 
+    _hw_encoder = None
+
+    @classmethod
+    def get_hw_encoder(cls):
+        if cls._hw_encoder is not None:
+            return cls._hw_encoder
+            
+        cls._hw_encoder = "libx264" # default fallback
+        import subprocess, os
+        try:
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            r = subprocess.run(['wmic', 'path', 'win32_VideoController', 'get', 'name'], capture_output=True, text=True, startupinfo=startupinfo)
+            out = r.stdout.lower()
+            if "nvidia" in out:
+                cls._hw_encoder = "h264_nvenc"
+            elif "amd" in out or "radeon" in out:
+                cls._hw_encoder = "h264_amf"
+        except:
+            pass
+        return cls._hw_encoder
+
     @staticmethod
     def _default_video_args(formato_destino: str):
         fmt = (formato_destino or '').lower()
+        hw = VideoFormats.get_hw_encoder()
+        
         if fmt in ('mp4', 'mov', 'm4v'):
-            return ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
+            return ['-c:v', hw, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart']
         if fmt == 'mkv':
-            return ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
+            return ['-c:v', hw, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
         if fmt == 'webm':
             return ['-c:v', 'libvpx-vp9', '-b:v', '0', '-crf', '32', '-c:a', 'libopus', '-b:a', '128k']
         if fmt == 'avi':
@@ -454,7 +485,7 @@ class VideoFormats:
         if fmt == 'mp3':
             # Extraer solo el audio en mp3 (descartar video)
             return ['-vn', '-c:a', 'libmp3lame', '-b:a', '192k']
-        return ['-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
+        return ['-c:v', hw, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k']
 
     @staticmethod
     def convertir(ruta_origen, ruta_destino, formato_destino=None):
@@ -466,3 +497,203 @@ class VideoFormats:
             return msg
         except Exception as e:
             return f"⚠️ Error con {os.path.basename(ruta_origen)}: {e}"
+
+class SubtitleGeneratorLogic:
+    @staticmethod
+    def _download_whisper_if_needed():
+        import requests, zipfile, os
+        appdata_dir = os.environ.get('ProgramData')
+        if not appdata_dir:
+            appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
+        whisper_dir = os.path.join(appdata_dir, "MediaHub", "models", "whisper")
+        os.makedirs(whisper_dir, exist_ok=True)
+        exe_path = os.path.join(whisper_dir, "main.exe")
+        
+        if not os.path.exists(exe_path):
+            zip_path = os.path.join(whisper_dir, "whisper-bin-x64.zip")
+            url = "https://github.com/ggerganov/whisper.cpp/releases/download/v1.5.4/whisper-bin-x64.zip"
+            response = requests.get(url, stream=True)
+            if response.status_code == 200:
+                with open(zip_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+                with zipfile.ZipFile(zip_path, 'r') as zip_ref:
+                    zip_ref.extractall(whisper_dir)
+                os.remove(zip_path)
+            else:
+                raise Exception("No se pudo descargar el motor Whisper.")
+        return exe_path
+
+    @staticmethod
+    def _download_model_if_needed(model_size):
+        import requests, os
+        appdata_dir = os.environ.get('ProgramData')
+        if not appdata_dir:
+            appdata_dir = os.environ.get('APPDATA') or os.path.expanduser('~')
+        models_dir = os.path.join(appdata_dir, "MediaHub", "models", "whisper")
+        os.makedirs(models_dir, exist_ok=True)
+        
+        model_name = f"ggml-{model_size}.bin"
+        model_path = os.path.join(models_dir, model_name)
+        
+        if not os.path.exists(model_path):
+            url = f"https://huggingface.co/ggerganov/whisper.cpp/resolve/main/{model_name}"
+            response = requests.get(url, stream=True)
+            if response.status_code == 200:
+                with open(model_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=8192):
+                        f.write(chunk)
+            else:
+                raise Exception(f"No se pudo descargar el modelo {model_size}.")
+        return model_path
+
+    @staticmethod
+    def generar_subtitulos(ruta_origen, ruta_destino, model_size="tiny", language="auto"):
+        import subprocess, tempfile, os, shutil, uuid
+        try:
+            exe_path = SubtitleGeneratorLogic._download_whisper_if_needed()
+            model_path = SubtitleGeneratorLogic._download_model_if_needed(model_size)
+            
+            ruta_destino = _prepare_dest(ruta_destino)
+            temp_dir = tempfile.gettempdir()
+            unique_id = str(uuid.uuid4())
+            wav_tmp = os.path.join(temp_dir, f"audio_{unique_id}.wav")
+            
+            # Extract 16kHz wav audio
+            ffmpeg_path = _find_ffmpeg()
+            if not ffmpeg_path:
+                return "❌ ffmpeg no está disponible."
+            
+            cmd_ffmpeg = [ffmpeg_path, "-y", "-i", ruta_origen, "-vn", "-ar", "16000", "-ac", "1", "-c:a", "pcm_s16le", wav_tmp]
+            startupinfo = None
+            if os.name == 'nt':
+                startupinfo = subprocess.STARTUPINFO()
+                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+            subprocess.run(cmd_ffmpeg, check=True, startupinfo=startupinfo, capture_output=True)
+            
+            # Run Whisper
+            cmd_whisper = [
+                exe_path,
+                "-m", model_path,
+                "-f", wav_tmp,
+                "-l", language,
+                "-osrt"
+            ]
+            
+            res = subprocess.run(cmd_whisper, check=False, startupinfo=startupinfo, capture_output=True, text=True)
+            if res.returncode != 0:
+                raise Exception(f"Whisper falló: {res.stderr}")
+            
+            srt_tmp = wav_tmp + ".srt"
+            if os.path.exists(srt_tmp):
+                shutil.copy2(srt_tmp, ruta_destino)
+                os.remove(srt_tmp)
+            else:
+                raise Exception("El programa no generó el archivo SRT.")
+            
+            if os.path.exists(wav_tmp):
+                os.remove(wav_tmp)
+                
+            return f"✅ Subtítulos generados: {os.path.basename(ruta_destino)}"
+        except Exception as e:
+            return f"⚠️ Error generando subtítulos: {e}"
+
+class WatermarkLogic:
+    @staticmethod
+    def aplicar_marca_agua(ruta_origen, ruta_destino, watermark_path, position="bottom-right", opacity=100):
+        import os
+        try:
+            ruta_destino = _prepare_dest(ruta_destino)
+            ext = os.path.splitext(ruta_origen)[1].lower()
+            
+            if ext in ['.mp4', '.mkv', '.avi', '.mov', '.webm', '.flv']:
+                return WatermarkLogic._watermark_video(ruta_origen, ruta_destino, watermark_path, position, opacity)
+            else:
+                return WatermarkLogic._watermark_image(ruta_origen, ruta_destino, watermark_path, position, opacity)
+        except Exception as e:
+            return f"⚠️ Error aplicando marca de agua: {e}"
+
+    @staticmethod
+    def _watermark_image(ruta_origen, ruta_destino, watermark_path, position, opacity):
+        from PIL import Image
+        import os
+        base_image = Image.open(ruta_origen).convert("RGBA")
+        watermark = Image.open(watermark_path).convert("RGBA")
+        
+        if opacity < 100:
+            alpha = watermark.split()[3]
+            alpha = alpha.point(lambda p: p * (opacity / 100.0))
+            watermark.putalpha(alpha)
+            
+        wm_ratio = watermark.width / watermark.height
+        new_wm_width = int(base_image.width * 0.15)
+        new_wm_height = int(new_wm_width / wm_ratio)
+        watermark = watermark.resize((new_wm_width, new_wm_height), Image.Resampling.LANCZOS)
+        
+        margin = int(base_image.width * 0.03)
+        x, y = 0, 0
+        if position == "top-left":
+            x, y = margin, margin
+        elif position == "top-right":
+            x, y = base_image.width - watermark.width - margin, margin
+        elif position == "bottom-left":
+            x, y = margin, base_image.height - watermark.height - margin
+        elif position == "bottom-right":
+            x, y = base_image.width - watermark.width - margin, base_image.height - watermark.height - margin
+        elif position == "center":
+            x, y = (base_image.width - watermark.width) // 2, (base_image.height - watermark.height) // 2
+            
+        base_image.paste(watermark, (x, y), watermark)
+        
+        formato = os.path.splitext(ruta_destino)[1].lstrip('.').lower()
+        if formato in ['jpg', 'jpeg']:
+            base_image = base_image.convert("RGB")
+            base_image.save(ruta_destino, quality=95)
+        else:
+            base_image.save(ruta_destino)
+            
+        return f"✅ Marca de agua aplicada: {os.path.basename(ruta_destino)}"
+
+    @staticmethod
+    def _watermark_video(ruta_origen, ruta_destino, watermark_path, position, opacity):
+        import subprocess, os
+        ffmpeg_path = _find_ffmpeg()
+        if not ffmpeg_path:
+            return "❌ ffmpeg no está disponible."
+            
+        margin_expr = "main_w*0.03"
+        if position == "top-left":
+            overlay = f"overlay={margin_expr}:{margin_expr}"
+        elif position == "top-right":
+            overlay = f"overlay=main_w-overlay_w-{margin_expr}:{margin_expr}"
+        elif position == "bottom-left":
+            overlay = f"overlay={margin_expr}:main_h-overlay_h-{margin_expr}"
+        elif position == "bottom-right":
+            overlay = f"overlay=main_w-overlay_w-{margin_expr}:main_h-overlay_h-{margin_expr}"
+        elif position == "center":
+            overlay = "overlay=(main_w-overlay_w)/2:(main_h-overlay_h)/2"
+            
+        opc = opacity / 100.0
+        
+        filter_complex = f"[1:v]format=rgba,colorchannelmixer=aa={opc}[wm];[0:v][wm]{overlay}"
+        
+        cmd = [
+            ffmpeg_path, "-y",
+            "-i", ruta_origen,
+            "-i", watermark_path,
+            "-filter_complex", filter_complex,
+            "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy",
+            ruta_destino
+        ]
+        
+        startupinfo = None
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            
+        try:
+            subprocess.run(cmd, check=True, startupinfo=startupinfo, capture_output=True, text=True)
+            return f"✅ Marca de agua aplicada: {os.path.basename(ruta_destino)}"
+        except subprocess.CalledProcessError as e:
+            return f"⚠️ Error en FFmpeg: {e.stderr}"

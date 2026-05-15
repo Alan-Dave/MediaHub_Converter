@@ -1,7 +1,7 @@
 import sys
 import os
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QHBoxLayout, QMessageBox, QStackedWidget
 )
 from PyQt6.QtCore import Qt, QSize
 from PyQt6.QtGui import QIcon
@@ -31,9 +31,18 @@ class LauncherWindow(QWidget):
         self.init_ui()
 
     def init_ui(self):
-        self.setGeometry(160, 120, 900, 640)
+        self.setGeometry(160, 120, 900, 720)
 
-        root_layout = QVBoxLayout()
+        # Configurar Stacked Widget
+        self.stacked_widget = QStackedWidget()
+        main_layout = QVBoxLayout()
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.addWidget(self.stacked_widget)
+        self.setLayout(main_layout)
+
+        # Construir la página del menú
+        self.menu_page = QWidget()
+        root_layout = QVBoxLayout(self.menu_page)
         root_layout.setContentsMargins(28, 24, 28, 24)
         root_layout.setSpacing(0)
         main_card, layout = make_card_container()
@@ -97,51 +106,48 @@ class LauncherWindow(QWidget):
         layout.addLayout(footer)
 
         root_layout.addWidget(main_card)
-        self.setLayout(root_layout)
+        
+        self.stacked_widget.addWidget(self.menu_page)
+        self.loaded_pages = {}
 
-        self.image_window = None
-        self.audio_window = None
-        self.video_window = None
-        self.rescaler_window = None
-        self.audiocut_window = None
+    def go_home(self):
+        self.stacked_widget.setCurrentWidget(self.menu_page)
+
+    def show_tool(self, tool_id, ToolClass):
+        if tool_id not in self.loaded_pages:
+            tool_widget = ToolClass()
+            tool_widget.parent_navigator = self
+            self.stacked_widget.addWidget(tool_widget)
+            self.loaded_pages[tool_id] = tool_widget
+        self.stacked_widget.setCurrentWidget(self.loaded_pages[tool_id])
 
     def open_audio_cut(self):
         try:
-            self.audiocut_window = AudioCutUI()
-            self.audiocut_window.show()
-            self.close()
+            self.show_tool('audio_cut', AudioCutUI)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el cortador de audio:\n{e}")
 
     def open_image_rescaler(self):
         try:
-            self.rescaler_window = ImageRescaler()
-            self.rescaler_window.show()
-            self.close()
+            self.show_tool('image_rescaler', ImageRescaler)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el reescalador:\n{e}")
 
     def open_image_converter(self):
         try:
-            self.image_window = ImageConverter()
-            self.image_window.show()
-            self.close()
+            self.show_tool('image_converter', ImageConverter)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el conversor de imágenes:\n{e}")
 
     def open_audio_converter(self):
         try:
-            self.audio_window = AudioConverter()
-            self.audio_window.show()
-            self.close()
+            self.show_tool('audio_converter', AudioConverter)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el conversor de audio:\n{e}")
 
     def open_video_converter(self):
         try:
-            self.video_window = VideoConverter()
-            self.video_window.show()
-            self.close()
+            self.show_tool('video_converter', VideoConverter)
         except Exception as e:
             QMessageBox.critical(self, "Error", f"No se pudo abrir el conversor de video:\n{e}")
 

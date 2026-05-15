@@ -190,8 +190,8 @@ class QualityEnhancerUI(QWidget):
 
     def go_back(self):
         from core.ui.hub_window import HubWindow
-        self.index_window = HubWindow()
-        self.index_window.show()
+        self.hub_window = HubWindow()
+        self.hub_window.show()
         self.close()
 
     def select_image(self):
@@ -329,9 +329,15 @@ class QualityEnhancerUI(QWidget):
                     f"Procesados con éxito: {converted}\nFallidos: {failed}",
                 )
             try:
-                os.startfile(output_dir)
-            except AttributeError:
-                subprocess.Popen(["xdg-open", output_dir])
+                from core.ui.result_viewer import ResultViewerDialog
+                viewer = ResultViewerDialog(output_dir, self)
+                viewer.exec()
+            except Exception:
+                try:
+                    os.startfile(output_dir)
+                except AttributeError:
+                    import subprocess
+                    subprocess.Popen(["xdg-open", output_dir])
             return
 
         if not self.image_path:
