@@ -3,9 +3,9 @@ import os
 import datetime
 import subprocess
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, QHBoxLayout, QProgressDialog
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, QHBoxLayout
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QThread, pyqtSignal
 from PyQt6.QtGui import QTransform, QPixmap
 from apps.document_converter.converters import conversion as Conversion
 from apps.document_converter.ui.ui_theme import (
@@ -85,6 +85,50 @@ class RotatingLabel(QLabel):
         transform = QTransform().rotate(self.angle)
         rotated_pixmap = self.original_pixmap.transformed(transform, Qt.TransformationMode.SmoothTransformation)
         self.setPixmap(rotated_pixmap)
+
+class ConversionWorker(QThread):
+    progress_updated = pyqtSignal(int, str)
+    finished = pyqtSignal(int, int, list, bool) # converted, failed, errors, was_cancelled
+
+    def __init__(self, files, output_dir, from_ext, to_ext, progress_dialog):
+        super().__init__()
+        self.files = files
+        self.output_dir = output_dir
+        self.from_ext = from_ext
+        self.to_ext = to_ext
+        self.progress_dialog = progress_dialog
+
+    def run(self):
+        import time
+        converted = 0
+        failed = 0
+        errors = []
+        total = len(self.files)
+        was_cancelled = False
+        
+        for idx, source in enumerate(self.files, start=1):
+            while self.progress_dialog.is_paused and not self.progress_dialog.is_cancelled:
+                time.sleep(0.2)
+                
+            if self.progress_dialog.is_cancelled:
+                was_cancelled = True
+                break
+                
+            base = os.path.splitext(os.path.basename(source))[0]
+            destino_path = os.path.join(self.output_dir, f"{base}.{self.to_ext}")
+            
+            self.progress_updated.emit(idx - 1, f"Convirtiendo... ({idx}/{total})")
+            
+            result = Conversion.DocumentFormats.convertir(source, destino_path, self.from_ext, self.to_ext)
+            if str(result).startswith("✅"):
+                converted += 1
+            else:
+                failed += 1
+                errors.append(f"{os.path.basename(source)}: {str(result)}")
+                
+            self.progress_updated.emit(idx, f"Completado ({idx}/{total})")
+            
+        self.finished.emit(converted, failed, errors, was_cancelled)
 
 class DocumentConverterWindow(QWidget):
     def __init__(self, from_ext, to_ext, title="Convertidor de Documentos"):
@@ -264,86 +308,77 @@ class DocumentConverterWindow(QWidget):
         return QFileDialog.getExistingDirectory(self, "Seleccionar carpeta de salida")
 
     def convert_file(self):
+        if not self.batch_files:
+            QMessageBox.warning(self, "Advertencia", "Por favor selecciona al menos un archivo primero.")
+            return
+
         output_dir = self.choose_output_folder()
         if not output_dir:
             return
 
-        if self.batch_files:
-            if len(self.batch_files) > 5:
-                folder_name = "Conversion_Masiva_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_dir = os.path.join(output_dir, folder_name)
-                if not os.path.exists(output_dir):
-                    os.makedirs(output_dir)
-                    
-            converted = 0
-            failed = 0
-            total = len(self.batch_files)
-            progress = QProgressDialog("Convirtiendo documentos...", None, 0, total, self)
-            progress.setWindowTitle("Procesando")
-            progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
-            progress.show()
-            QApplication.processEvents()
+        if len(self.batch_files) > 5:
+            folder_name = "Conversion_Masiva_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_dir = os.path.join(output_dir, folder_name)
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+                
+        from core.ui.advanced_progress import AdvancedProgressDialog
+        self.progress = AdvancedProgressDialog("Iniciando conversión...", len(self.batch_files), self)
+        self.progress.show()
 
-            try:
-                for idx, source in enumerate(self.batch_files, start=1):
-                    base = os.path.splitext(os.path.basename(source))[0]
-                    destino_path = os.path.join(output_dir, f"{base}.{self.to_ext}")
-                    result = Conversion.DocumentFormats.convertir(source, destino_path, self.from_ext, self.to_ext)
-                    if str(result).startswith("✅"):
-                        converted += 1
-                    else:
-                        failed += 1
-                    progress.setLabelText(f"Convirtiendo... ({idx}/{total})")
-                    progress.setValue(idx)
-                    QApplication.processEvents()
-            finally:
-                progress.close()
+        # Deshabilitar botones mientras convierte
+        self.convert_button.setEnabled(False)
+        self.remove_button.setEnabled(False)
+        self.select_button.setEnabled(False)
+        self.select_folder_button.setEnabled(False)
 
+        # Iniciar thread
+        self.worker = ConversionWorker(self.batch_files, output_dir, self.from_ext, self.to_ext, self.progress)
+        self.worker.progress_updated.connect(self.update_progress)
+        self.worker.finished.connect(lambda c, f, e, canc: self.conversion_finished(c, f, e, canc, output_dir))
+        self.worker.start()
+
+    def update_progress(self, value, text):
+        self.progress.setValue(value)
+        self.progress.setLabelText(text)
+
+    def conversion_finished(self, converted, failed, errors, was_cancelled, output_dir):
+        self.progress.close()
+        
+        # Rehabilitar botones
+        self.convert_button.setEnabled(True)
+        self.remove_button.setEnabled(True)
+        self.select_button.setEnabled(True)
+        self.select_folder_button.setEnabled(True)
+
+        if was_cancelled:
+            QMessageBox.warning(
+                self,
+                "Conversión Cancelada",
+                f"Proceso cancelado por el usuario.\nSe completaron {converted} archivos de {len(self.batch_files)} antes de cancelar."
+            )
+        elif failed > 0:
+            error_msg = "\n".join(errors[:5]) # Mostrar máximo 5 errores
+            if len(errors) > 5:
+                error_msg += f"\n... y {len(errors) - 5} más."
+                
+            QMessageBox.warning(
+                self,
+                "Conversión completada con errores",
+                f"Convertidos: {converted}\nFallidos: {failed}\n\nErrores:\n{error_msg}"
+            )
+        else:
             QMessageBox.information(
                 self,
-                "Conversión masiva",
-                f"Convertidos: {converted}\nFallidos: {failed}",
+                "Conversión exitosa",
+                f"Se convirtieron {converted} archivo(s) correctamente."
             )
-            try:
-                os.startfile(output_dir)
-            except Exception:
-                try:
-                    subprocess.Popen(["xdg-open", output_dir])
-                except Exception:
-                    pass
-            return
-
-        if not self.file_path:
-            QMessageBox.warning(self, "Advertencia", "Por favor selecciona un archivo primero.")
-            return
-
-        base = os.path.splitext(os.path.basename(self.file_path))[0]
-        destino_path = os.path.join(output_dir, f"{base}.{self.to_ext}")
-
-        progress = QProgressDialog("Convirtiendo documento...", None, 0, 0, self)
-        progress.setWindowTitle("Procesando")
-        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-        progress.setMinimumDuration(0)
-        progress.show()
-        QApplication.processEvents()
-
-        try:
-            resultado = Conversion.DocumentFormats.convertir(self.file_path, destino_path, self.from_ext, self.to_ext)
-        finally:
-            progress.close()
-
-        if resultado.startswith('✅'):
-            QMessageBox.information(self, "Éxito", resultado)
-        else:
-            QMessageBox.critical(self, "Error", resultado)
 
         try:
             os.startfile(output_dir)
         except Exception:
             try:
-                subprocess.Popen(['xdg-open', output_dir])
+                subprocess.Popen(["xdg-open", output_dir])
             except Exception:
                 pass
 

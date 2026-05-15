@@ -1,2 +1,2 @@
-APP_VERSION = "v1.3"
+APP_VERSION = "v1.4"
 GITHUB_REPO = "Alan-Dave/MediaHub_Converter"

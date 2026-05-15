@@ -4,7 +4,7 @@ import datetime
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, 
-    QHBoxLayout, QProgressDialog, QRadioButton, QButtonGroup, QSpinBox, QCheckBox
+    QHBoxLayout, QRadioButton, QButtonGroup, QSpinBox, QCheckBox
 )
 from PyQt6.QtGui import QPixmap, QImageReader
 from PyQt6.QtCore import Qt
@@ -342,16 +342,24 @@ class ImageRescaler(QWidget):
             converted = 0
             failed = 0
             total = len(self.batch_files)
-            progress = QProgressDialog("Reescalando imágenes...", None, 0, total, self)
-            progress.setWindowTitle("Procesando")
-            progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
+            was_cancelled = False
+            
+            from core.ui.advanced_progress import AdvancedProgressDialog
+            progress = AdvancedProgressDialog("Reescalando imágenes...", total, self)
             progress.show()
             QApplication.processEvents()
 
             try:
                 for idx, file_path in enumerate(self.batch_files, start=1):
+                    while progress.is_paused and not progress.is_cancelled:
+                        import time
+                        time.sleep(0.1)
+                        QApplication.processEvents()
+                        
+                    if progress.is_cancelled:
+                        was_cancelled = True
+                        break
+                        
                     nombre = os.path.basename(file_path)
                     ruta_destino = os.path.join(output_dir, nombre)
                     
@@ -377,11 +385,18 @@ class ImageRescaler(QWidget):
             finally:
                 progress.close()
 
-            QMessageBox.information(
-                self,
-                "Reescalado masivo",
-                f"Reescalados: {converted}\nFallidos: {failed}",
-            )
+            if was_cancelled:
+                QMessageBox.warning(
+                    self,
+                    "Conversión Cancelada",
+                    f"Proceso cancelado por el usuario.\nSe completaron {converted} archivos de {total} antes de cancelar."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Reescalado masivo",
+                    f"Reescalados: {converted}\nFallidos: {failed}",
+                )
             try:
                 os.startfile(output_dir)
             except AttributeError:
@@ -395,10 +410,8 @@ class ImageRescaler(QWidget):
         nombre = os.path.basename(self.image_path)
         ruta_destino = os.path.join(output_dir, nombre)
 
-        progress = QProgressDialog("Reescalando imagen...", None, 0, 0, self)
-        progress.setWindowTitle("Procesando")
-        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-        progress.setMinimumDuration(0)
+        from core.ui.advanced_progress import AdvancedProgressDialog
+        progress = AdvancedProgressDialog("Reescalando imagen...", 1, self)
         progress.show()
         QApplication.processEvents()
         try:

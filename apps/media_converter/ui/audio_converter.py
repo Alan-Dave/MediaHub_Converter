@@ -3,7 +3,7 @@ import os
 import datetime
 import subprocess
 from PyQt6.QtWidgets import (
-    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, QComboBox, QHBoxLayout, QProgressDialog
+    QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, QComboBox, QHBoxLayout
 )
 from PyQt6.QtCore import Qt
 from apps.media_converter.converters import conversion as Conversion
@@ -271,16 +271,24 @@ class AudioConverter(QWidget):
             skipped = 0
             failed = 0
             total = len(self.batch_files)
-            progress = QProgressDialog("Convirtiendo audios...", None, 0, total, self)
-            progress.setWindowTitle("Procesando")
-            progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
+            was_cancelled = False
+            
+            from core.ui.advanced_progress import AdvancedProgressDialog
+            progress = AdvancedProgressDialog("Convirtiendo audios...", total, self)
             progress.show()
             QApplication.processEvents()
 
             try:
                 for idx, source in enumerate(self.batch_files, start=1):
+                    while progress.is_paused and not progress.is_cancelled:
+                        import time
+                        time.sleep(0.1)
+                        QApplication.processEvents()
+                        
+                    if progress.is_cancelled:
+                        was_cancelled = True
+                        break
+                        
                     from_format = os.path.splitext(source)[1].lstrip(".").lower()
                     if from_format == "mpeg":
                         from_format = "mp3"
@@ -305,11 +313,18 @@ class AudioConverter(QWidget):
             if skipped > 0:
                 msg += f"\n\nSe omitieron {skipped} audios porque ya estaban en formato {to_format.upper()}."
 
-            QMessageBox.information(
-                self,
-                "Conversión masiva",
-                msg,
-            )
+            if was_cancelled:
+                QMessageBox.warning(
+                    self,
+                    "Conversión Cancelada",
+                    f"Proceso cancelado por el usuario.\nSe completaron {converted} archivos de {total} antes de cancelar."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Conversión masiva",
+                    msg,
+                )
             try:
                 os.startfile(output_dir)
             except Exception:
@@ -330,10 +345,8 @@ class AudioConverter(QWidget):
         base = os.path.splitext(os.path.basename(self.file_path))[0]
         destino_path = os.path.join(output_dir, f"{base}.{to_format}")
 
-        progress = QProgressDialog("Convirtiendo audio...", None, 0, 0, self)
-        progress.setWindowTitle("Procesando")
-        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-        progress.setMinimumDuration(0)
+        from core.ui.advanced_progress import AdvancedProgressDialog
+        progress = AdvancedProgressDialog("Convirtiendo audio...", 1, self)
         progress.show()
         QApplication.processEvents()
 

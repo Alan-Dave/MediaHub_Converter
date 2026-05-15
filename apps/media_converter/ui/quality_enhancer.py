@@ -4,7 +4,7 @@ import datetime
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, 
-    QHBoxLayout, QProgressDialog, QComboBox, QCheckBox, QFrame
+    QHBoxLayout, QComboBox, QCheckBox, QFrame
 )
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
@@ -275,16 +275,24 @@ class QualityEnhancerUI(QWidget):
             converted = 0
             failed = 0
             total = len(self.batch_files)
-            progress = QProgressDialog("Mejorando calidad... Esto tomará un tiempo por cada imagen.", None, 0, total, self)
-            progress.setWindowTitle("Procesando")
-            progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
+            was_cancelled = False
+            
+            from core.ui.advanced_progress import AdvancedProgressDialog
+            progress = AdvancedProgressDialog("Mejorando calidad...", total, self)
             progress.show()
             QApplication.processEvents()
 
             try:
                 for idx, file_path in enumerate(self.batch_files, start=1):
+                    while progress.is_paused and not progress.is_cancelled:
+                        import time
+                        time.sleep(0.1)
+                        QApplication.processEvents()
+                        
+                    if progress.is_cancelled:
+                        was_cancelled = True
+                        break
+                        
                     nombre = os.path.splitext(os.path.basename(file_path))[0]
                     ext = os.path.splitext(file_path)[1]
                     ruta_destino = os.path.join(output_dir, f"{nombre}_{scale}x{ext}")
@@ -308,11 +316,18 @@ class QualityEnhancerUI(QWidget):
             finally:
                 progress.close()
 
-            QMessageBox.information(
-                self,
-                "Proceso Masivo",
-                f"Procesados con éxito: {converted}\nFallidos: {failed}",
-            )
+            if was_cancelled:
+                QMessageBox.warning(
+                    self,
+                    "Conversión Cancelada",
+                    f"Proceso cancelado por el usuario.\nSe completaron {converted} imágenes de {total} antes de cancelar."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Proceso Masivo",
+                    f"Procesados con éxito: {converted}\nFallidos: {failed}",
+                )
             try:
                 os.startfile(output_dir)
             except AttributeError:
@@ -327,10 +342,8 @@ class QualityEnhancerUI(QWidget):
         ext = os.path.splitext(self.image_path)[1]
         ruta_destino = os.path.join(output_dir, f"{nombre}_{scale}x{ext}")
 
-        progress = QProgressDialog("Mejorando calidad... Esto puede demorar bastante.", None, 0, 0, self)
-        progress.setWindowTitle("Procesando")
-        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-        progress.setMinimumDuration(0)
+        from core.ui.advanced_progress import AdvancedProgressDialog
+        progress = AdvancedProgressDialog("Mejorando calidad...", 1, self)
         progress.show()
         QApplication.processEvents()
         try:

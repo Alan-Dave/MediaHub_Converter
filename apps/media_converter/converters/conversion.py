@@ -241,15 +241,19 @@ class ImageRescalerLogic:
 
 class BackgroundRemoverLogic:
     @staticmethod
-    def quitar_fondo(ruta_origen, ruta_destino):
+    def quitar_fondo(ruta_origen, ruta_destino, model_name="u2net", alpha_matting=False):
         try:
             import rembg
             with open(ruta_origen, "rb") as input_file:
                 input_data = input_file.read()
                 
-            # Utilizamos un modelo avanzado y aplicamos post-procesado para evitar manchas
-            session = rembg.new_session("isnet-general-use")
-            output_data = rembg.remove(input_data, session=session, post_process_mask=True)
+            session = rembg.new_session(model_name)
+            output_data = rembg.remove(
+                input_data, 
+                session=session, 
+                post_process_mask=True,
+                alpha_matting=alpha_matting
+            )
             
             # Ensure the destination path is absolute and exists
             ruta_destino = _prepare_dest(ruta_destino)

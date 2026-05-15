@@ -1,5 +1,6 @@
 import os
 import sys
+import re
 import requests
 import subprocess
 from PyQt6.QtWidgets import (
@@ -12,6 +13,29 @@ from PyQt6.QtGui import QIcon, QFont
 from core.config import APP_VERSION, GITHUB_REPO
 
 API_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
+
+def extract_version_from_release(data: dict) -> str:
+    """
+    Extrae el número de versión del release de GitHub.
+    Primero intenta leerlo desde el nombre de los assets (ej: 'MediaHub_v1.4_Setup.exe'),
+    luego desde el tag_name como respaldo.
+    Devuelve la versión sin 'v' (ej: '1.4').
+    """
+    # Buscar en los assets: MediaHub_v{VERSION}_Setup.exe
+    for asset in data.get("assets", []):
+        asset_name = asset.get("name", "")
+        match = re.search(r'MediaHub_v([\d.]+)', asset_name, re.IGNORECASE)
+        if match:
+            return match.group(1)
+
+    # Respaldo: usar el tag_name del release
+    tag = data.get("tag_name", "")
+    match = re.search(r'v?([\d.]+)', tag)
+    if match:
+        return match.group(1)
+
+    return ""
 
 class DownloadThread(QThread):
     progress = pyqtSignal(int)
@@ -165,14 +189,13 @@ class CheckUpdateThread(QThread):
             response = requests.get(API_URL, timeout=5)
             response.raise_for_status()
             data = response.json()
-            
-            latest_version = data.get("tag_name", "")
-            if not latest_version:
+
+            lat_v = extract_version_from_release(data)
+            if not lat_v:
                 return
 
             curr_v = APP_VERSION.lstrip('v')
-            lat_v = latest_version.lstrip('v')
-            
+
             curr_parts = [int(x) for x in curr_v.split('.') if x.isdigit()]
             lat_parts = [int(x) for x in lat_v.split('.') if x.isdigit()]
 
@@ -186,45 +209,45 @@ class CheckUpdateThread(QThread):
                         break
                     elif l < c:
                         break
-                
+
                 if len(lat_parts) > len(curr_parts) and not is_newer:
                     is_newer = True
-                
+
             if is_newer:
                 description = data.get("body", "No hay descripción disponible.")
                 assets = data.get("assets", [])
                 download_url = None
                 size_mb = 0
-                
+
                 for asset in assets:
                     if asset.get("name", "").endswith(".exe"):
                         download_url = asset.get("browser_download_url")
                         size_mb = asset.get("size", 0) / (1024 * 1024)
                         break
-                
+
                 if download_url:
-                    self.update_available.emit(latest_version, description, download_url, size_mb)
-                    
+                    self.update_available.emit(lat_v, description, download_url, size_mb)
+
         except Exception as e:
             print(f"Update check failed: {e}")
 
 def check_for_updates(parent=None):
     """
     Checks GitHub for newer releases.
-    If a newer release with a .exe asset is found, shows the UpdateDialog.
+    Extrae la versión desde el nombre del asset (ej: 'MediaHub_v1.4_Setup.exe')
+    para comparar correctamente con APP_VERSION.
     """
     try:
         response = requests.get(API_URL, timeout=5)
         response.raise_for_status()
         data = response.json()
-        
-        latest_version = data.get("tag_name", "")
-        if not latest_version:
+
+        lat_v = extract_version_from_release(data)
+        if not lat_v:
             return
 
         curr_v = APP_VERSION.lstrip('v')
-        lat_v = latest_version.lstrip('v')
-        
+
         curr_parts = [int(x) for x in curr_v.split('.') if x.isdigit()]
         lat_parts = [int(x) for x in lat_v.split('.') if x.isdigit()]
 
@@ -238,26 +261,26 @@ def check_for_updates(parent=None):
                     break
                 elif l < c:
                     break
-            
+
             if len(lat_parts) > len(curr_parts) and not is_newer:
                 is_newer = True
-            
+
         if is_newer:
             description = data.get("body", "No hay descripción disponible.")
             assets = data.get("assets", [])
             download_url = None
             size_mb = 0
-            
+
             for asset in assets:
                 if asset.get("name", "").endswith(".exe"):
                     download_url = asset.get("browser_download_url")
                     size_mb = asset.get("size", 0) / (1024 * 1024)
                     break
-            
+
             if download_url:
-                dialog = UpdateDialog(latest_version, description, download_url, size_mb, parent)
+                dialog = UpdateDialog(lat_v, description, download_url, size_mb, parent)
                 dialog.exec()
-                
+
     except Exception as e:
         print(f"Update check failed: {e}")
 

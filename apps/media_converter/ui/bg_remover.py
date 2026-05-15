@@ -4,7 +4,7 @@ import datetime
 import subprocess
 from PyQt6.QtWidgets import (
     QApplication, QWidget, QLabel, QPushButton, QVBoxLayout, QFileDialog, QMessageBox, 
-    QHBoxLayout, QProgressDialog
+    QHBoxLayout, QComboBox, QCheckBox, QFrame
 )
 from PyQt6.QtGui import QPixmap
 from PyQt6.QtCore import Qt
@@ -105,6 +105,35 @@ class BackgroundRemoverUI(QWidget):
         self.info_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-size: 10pt;")
         self.info_label.setWordWrap(True)
         card_layout.addWidget(self.info_label)
+
+        # Settings Frame
+        settings_frame = QFrame()
+        settings_frame.setStyleSheet(f"background: {self._colors['card']}; border-radius: 8px; margin-top: 10px; margin-bottom: 10px;")
+        settings_layout = QVBoxLayout(settings_frame)
+        settings_layout.setContentsMargins(15, 15, 15, 15)
+        
+        # Model Selection
+        model_layout = QHBoxLayout()
+        model_label = QLabel("Modelo de IA:")
+        model_label.setStyleSheet(f"color: {self._colors['text_muted']}; font-weight: bold;")
+        self.combo_model = QComboBox()
+        self.combo_model.addItems(["Estándar (u2net)", "Personas (u2net_human_seg)", "Objetos/Ropa (u2net_cloth_seg)", "Preciso/Lento (isnet-general-use)"])
+        self.combo_model.setCurrentText("Estándar (u2net)")
+        self.combo_model.setStyleSheet(f"background: {self._colors['bg']}; color: {self._colors['text_main']}; border: 1px solid {self._colors['border']}; border-radius: 4px; padding: 4px;")
+        model_layout.addWidget(model_label)
+        model_layout.addWidget(self.combo_model)
+        settings_layout.addLayout(model_layout)
+        
+        # Alpha Matting
+        alpha_layout = QHBoxLayout()
+        self.check_alpha = QCheckBox("Recorte Fino (Alpha Matting)")
+        self.check_alpha.setStyleSheet(f"color: {self._colors['text_main']}; font-weight: bold;")
+        self.check_alpha.setToolTip("Mejora el recorte de pelo, pelaje o bordes semitransparentes (como vidrios o fuego).")
+        alpha_layout.addWidget(self.check_alpha)
+        alpha_layout.addStretch()
+        settings_layout.addLayout(alpha_layout)
+        
+        card_layout.addWidget(settings_frame)
 
         self.image_label = ImageDropLabel(self.on_image_dropped, self)
         card_layout.addWidget(self.image_label)
@@ -219,6 +248,15 @@ class BackgroundRemoverUI(QWidget):
         if not output_dir:
             return
 
+        model_map = {
+            "Estándar (u2net)": "u2net",
+            "Personas (u2net_human_seg)": "u2net_human_seg",
+            "Objetos/Ropa (u2net_cloth_seg)": "u2net_cloth_seg",
+            "Preciso/Lento (isnet-general-use)": "isnet-general-use"
+        }
+        selected_model = model_map.get(self.combo_model.currentText(), "u2net")
+        alpha_matting = self.check_alpha.isChecked()
+
         if self.batch_files:
             if len(self.batch_files) > 5:
                 folder_name = "Quitar_Fondo_Masivo_" + datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -229,22 +267,32 @@ class BackgroundRemoverUI(QWidget):
             converted = 0
             failed = 0
             total = len(self.batch_files)
-            progress = QProgressDialog("Quitando fondos...", None, 0, total, self)
-            progress.setWindowTitle("Procesando")
-            progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-            progress.setMinimumDuration(0)
-            progress.setValue(0)
+            was_cancelled = False
+            
+            from core.ui.advanced_progress import AdvancedProgressDialog
+            progress = AdvancedProgressDialog("Quitando fondos...", total, self)
             progress.show()
             QApplication.processEvents()
 
             try:
                 for idx, file_path in enumerate(self.batch_files, start=1):
+                    while progress.is_paused and not progress.is_cancelled:
+                        import time
+                        time.sleep(0.1)
+                        QApplication.processEvents()
+                        
+                    if progress.is_cancelled:
+                        was_cancelled = True
+                        break
+                        
                     nombre = os.path.splitext(os.path.basename(file_path))[0]
                     ruta_destino = os.path.join(output_dir, f"{nombre}_nobg.png")
                     
                     resultado = BackgroundRemoverLogic.quitar_fondo(
                         ruta_origen=file_path,
-                        ruta_destino=ruta_destino
+                        ruta_destino=ruta_destino,
+                        model_name=selected_model,
+                        alpha_matting=alpha_matting
                     )
                     
                     if str(resultado).startswith("✅"):
@@ -258,11 +306,18 @@ class BackgroundRemoverUI(QWidget):
             finally:
                 progress.close()
 
-            QMessageBox.information(
-                self,
-                "Proceso Masivo",
-                f"Procesados con éxito: {converted}\nFallidos: {failed}",
-            )
+            if was_cancelled:
+                QMessageBox.warning(
+                    self,
+                    "Conversión Cancelada",
+                    f"Proceso cancelado por el usuario.\nSe procesaron {converted} imágenes de {total} antes de cancelar."
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Proceso Masivo",
+                    f"Procesados con éxito: {converted}\nFallidos: {failed}",
+                )
             try:
                 os.startfile(output_dir)
             except AttributeError:
@@ -276,16 +331,16 @@ class BackgroundRemoverUI(QWidget):
         nombre = os.path.splitext(os.path.basename(self.image_path))[0]
         ruta_destino = os.path.join(output_dir, f"{nombre}_nobg.png")
 
-        progress = QProgressDialog("Quitando fondo... Esto puede demorar unos segundos.", None, 0, 0, self)
-        progress.setWindowTitle("Procesando")
-        progress.setWindowModality(Qt.WindowModality.ApplicationModal)
-        progress.setMinimumDuration(0)
+        from core.ui.advanced_progress import AdvancedProgressDialog
+        progress = AdvancedProgressDialog("Quitando fondo...", 1, self)
         progress.show()
         QApplication.processEvents()
         try:
             resultado = BackgroundRemoverLogic.quitar_fondo(
                 ruta_origen=self.image_path,
-                ruta_destino=ruta_destino
+                ruta_destino=ruta_destino,
+                model_name=selected_model,
+                alpha_matting=alpha_matting
             )
         finally:
             progress.close()
