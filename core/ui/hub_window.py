@@ -51,8 +51,17 @@ def get_app_exe(app_id: str) -> str | None:
     if not reg:
         return None
     install_dir = os.path.join(get_apps_install_dir(), reg["dir"])
-    exe_path = os.path.join(install_dir, reg["exe"])
-    return exe_path if os.path.isfile(exe_path) else None
+    exe_name = reg["exe"]
+    exe_path = os.path.join(install_dir, exe_name)
+    if os.path.isfile(exe_path):
+        return exe_path
+
+    # Respaldo si el zip contenía una subcarpeta con el mismo nombre o similar
+    if os.path.isdir(install_dir):
+        for root, _, files in os.walk(install_dir):
+            if exe_name in files:
+                return os.path.join(root, exe_name)
+    return None
 
 
 def launch_app(app_id: str):
