@@ -1,5 +1,5 @@
 APP_VERSION = "v1.5"
-GITHUB_REPO = "Alan-Dave/MediaHub_Converter"
+GITHUB_REPO = "Media-Hub-Site/MediaHub-Launcher"
 
 # ── Organización Media-Hub-Site ───────────────────────────────────────────────
 ORG_NAME = "Media-Hub-Site"

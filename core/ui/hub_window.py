@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import re
 import subprocess
 import zipfile
 import tempfile
@@ -10,8 +11,7 @@ import requests
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QGridLayout, QFrame,
-    QGraphicsDropShadowEffect, QProgressDialog, QMessageBox,
-    QApplication
+    QGraphicsDropShadowEffect, QMessageBox, QApplication
 )
 from PyQt6.QtGui import QPixmap, QIcon, QColor, QDrag
 from PyQt6.QtCore import QMimeData, Qt, QSize, QThread, pyqtSignal
@@ -22,7 +22,7 @@ from core.config import APP_REGISTRY
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-#  Helpers de rutas y detección de instalación
+#  Helpers de rutas, versiones y detección de instalación
 # ─────────────────────────────────────────────────────────────────────────────
 
 def get_asset_path(filename):
@@ -42,6 +42,38 @@ def get_apps_install_dir() -> str:
     return path
 
 
+def get_installed_versions_file() -> str:
+    """Archivo JSON donde guardamos las versiones instaladas: %LOCALAPPDATA%\\MediaHub\\installed_versions.json"""
+    local = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+    hub_dir = os.path.join(local, "MediaHub")
+    os.makedirs(hub_dir, exist_ok=True)
+    return os.path.join(hub_dir, "installed_versions.json")
+
+
+def load_installed_versions() -> dict:
+    """Carga el diccionario {app_id: version_str} de apps instaladas."""
+    fpath = get_installed_versions_file()
+    if os.path.isfile(fpath):
+        try:
+            with open(fpath, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def save_installed_version(app_id: str, version: str):
+    """Guarda o actualiza la versión instalada de una micro-app."""
+    data = load_installed_versions()
+    data[app_id] = version.lstrip("v")
+    fpath = get_installed_versions_file()
+    try:
+        with open(fpath, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2)
+    except Exception as e:
+        print(f"Error guardando versión instalada: {e}")
+
+
 def get_app_exe(app_id: str) -> str | None:
     """
     Devuelve la ruta al ejecutable de una micro-app si está instalada,
@@ -56,7 +88,7 @@ def get_app_exe(app_id: str) -> str | None:
     if os.path.isfile(exe_path):
         return exe_path
 
-    # Respaldo si el zip contenía una subcarpeta con el mismo nombre o similar
+    # Respaldo si el zip contenía una subcarpeta
     if os.path.isdir(install_dir):
         for root, _, files in os.walk(install_dir):
             if exe_name in files:
@@ -72,15 +104,66 @@ def launch_app(app_id: str):
                          if sys.platform == "win32" else 0)
 
 
+def is_version_newer(current_ver: str, latest_ver: str) -> bool:
+    """
+    Compara semver básico (ej: '1.0.0' vs '1.1.0').
+    Devuelve True si latest_ver es estrictamente superior a current_ver.
+    """
+    def to_tuple(v: str):
+        v = v.lstrip("v")
+        parts = []
+        for x in v.split("."):
+            m = re.match(r"\d+", x)
+            parts.append(int(m.group(0)) if m else 0)
+        return tuple(parts)
+
+    try:
+        return to_tuple(latest_ver) > to_tuple(current_ver)
+    except Exception:
+        return latest_ver != current_ver
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  Worker de descarga / instalación
+#  Worker de consulta de versiones remotas para las micro-apps
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CheckMicroAppUpdatesThread(QThread):
+    """
+    Revisa en GitHub Releases la última versión de cada micro-app.
+    Emite update_found(app_id, latest_version).
+    """
+    update_found = pyqtSignal(str, str)
+
+    def run(self):
+        installed = load_installed_versions()
+        for app_id, reg in APP_REGISTRY.items():
+            exe = get_app_exe(app_id)
+            if not exe:
+                continue  # Solo verificar actualizaciones para apps instaladas
+
+            current_ver = installed.get(app_id, "0.0.0")
+            repo = reg["repo"]
+            api_url = f"https://api.github.com/repos/{repo}/releases/latest"
+            try:
+                resp = requests.get(api_url, timeout=10)
+                if resp.status_code == 200:
+                    data = resp.json()
+                    tag = data.get("tag_name", "").lstrip("v")
+                    if tag and is_version_newer(current_ver, tag):
+                        self.update_found.emit(app_id, tag)
+            except Exception:
+                pass
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+#  Worker de descarga / instalación / actualización
 # ─────────────────────────────────────────────────────────────────────────────
 
 class InstallWorker(QThread):
-    """Descarga el último release de una micro-app desde GitHub y lo extrae."""
+    """Descarga el release de una micro-app desde GitHub y lo extrae."""
 
     progress   = pyqtSignal(int, str)   # (porcentaje, texto)
-    finished   = pyqtSignal(str)        # mensaje de éxito
+    finished   = pyqtSignal(str, str)   # (app_id, app_name)
     error      = pyqtSignal(str)        # mensaje de error
 
     def __init__(self, app_id: str, parent=None):
@@ -101,6 +184,7 @@ class InstallWorker(QThread):
             resp = requests.get(api, timeout=15)
             resp.raise_for_status()
             data = resp.json()
+            latest_tag = data.get("tag_name", "1.0.0")
         except Exception as e:
             self.error.emit(f"No se pudo obtener la release:\n{e}")
             return
@@ -139,8 +223,8 @@ class InstallWorker(QThread):
             self.error.emit(f"Error al descargar:\n{e}")
             return
 
-        # Instalar
-        self.progress.emit(82, "Instalando…")
+        # Instalar / Extraer
+        self.progress.emit(82, "Instalando archivos…")
         install_base = get_apps_install_dir()
         dest_dir = os.path.join(install_base, reg["dir"])
         os.makedirs(dest_dir, exist_ok=True)
@@ -150,15 +234,16 @@ class InstallWorker(QThread):
                 with zipfile.ZipFile(tmp_file, "r") as zf:
                     zf.extractall(dest_dir)
             else:
-                # Si es un .exe de instalador, lanzarlo directamente
                 subprocess.run([tmp_file, "/SILENT", f"/DIR={dest_dir}"],
                                check=True)
+            # Guardar la versión instalada exitosamente
+            save_installed_version(self.app_id, latest_tag)
         except Exception as e:
             self.error.emit(f"Error al instalar:\n{e}")
             return
 
-        self.progress.emit(100, "¡Instalación completada!")
-        self.finished.emit(reg["name"])
+        self.progress.emit(100, "¡Completado con éxito!")
+        self.finished.emit(self.app_id, reg["name"])
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -171,6 +256,7 @@ class AppCard(QFrame):
         super().__init__(parent)
         self.card_id    = card_id
         self._is_disabled = is_disabled
+        self._pending_update_version = None
         self.setAcceptDrops(True)
 
         if is_disabled:
@@ -217,13 +303,13 @@ class AppCard(QFrame):
 
         action_layout = QHBoxLayout()
 
-        # Botón principal (Instalar / Abrir)
+        # Botón principal (Instalar / Abrir / Actualizar)
         self.action_btn = QPushButton()
         self.action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         action_layout.addWidget(self.action_btn)
         action_layout.addStretch()
 
-        # Etiqueta de estado
+        # Etiqueta de estado y versión
         self._status_label = QLabel()
         action_layout.addWidget(self._status_label)
 
@@ -233,27 +319,46 @@ class AppCard(QFrame):
         # Actualizar botón según estado instalado
         self.refresh_state()
 
+    def set_update_available(self, new_version: str):
+        """Notifica a la tarjeta que hay una nueva versión disponible."""
+        self._pending_update_version = new_version
+        self._set_btn_state("update")
+
     def refresh_state(self):
-        """Actualiza el botón según si la app está instalada."""
+        """Actualiza el botón según si la app está instalada o pendiente de actualización."""
         if self._is_disabled or self.card_id not in APP_REGISTRY:
             self._set_btn_state("disabled")
             return
 
         exe = get_app_exe(self.card_id)
         if exe:
-            self._set_btn_state("open")
+            if self._pending_update_version:
+                self._set_btn_state("update")
+            else:
+                self._set_btn_state("open")
         else:
+            self._pending_update_version = None
             self._set_btn_state("install")
 
     def _set_btn_state(self, state: str):
-        """state: 'open' | 'install' | 'disabled'"""
+        """state: 'open' | 'install' | 'update' | 'disabled'"""
         self._btn_state = state
+        installed = load_installed_versions()
+        cur_ver = installed.get(self.card_id)
+
         if state == "open":
             self.action_btn.setText(" ABRIR")
             self.action_btn.setIcon(
                 self.style().standardIcon(self.style().StandardPixmap.SP_DialogApplyButton))
             self.action_btn.setEnabled(True)
-            self._status_label.setText("✅ Instalado")
+            v_text = f" (v{cur_ver})" if cur_ver else ""
+            self._status_label.setText(f"✅ Instalado{v_text}")
+        elif state == "update":
+            self.action_btn.setText(" ACTUALIZAR")
+            self.action_btn.setIcon(
+                self.style().standardIcon(self.style().StandardPixmap.SP_BrowserReload))
+            self.action_btn.setEnabled(True)
+            self._status_label.setText(f"🚀 v{self._pending_update_version} disponible!")
         elif state == "install":
             self.action_btn.setText(" INSTALAR")
             self.action_btn.setIcon(
@@ -313,6 +418,8 @@ class AppCard(QFrame):
         state = getattr(self, "_btn_state", "disabled")
         if state == "install":
             self.action_btn.setStyleSheet(styles["btn_install"])
+        elif state == "update":
+            self.action_btn.setStyleSheet(styles.get("btn_update", styles["btn_open"]))
         elif state == "open":
             self.action_btn.setStyleSheet(styles["btn_open"])
         else:
@@ -333,14 +440,25 @@ class HubWindow(QMainWindow):
         self.init_ui()
         self._apply_theme()
 
-        # Verificar actualizaciones del Launcher en background
+        # 1. Verificar actualizaciones del Launcher en background
         self.update_thread = CheckUpdateThread(self)
         self.update_thread.update_available.connect(self.show_update_dialog)
         self.update_thread.start()
 
+        # 2. Verificar actualizaciones de las Micro-Apps instaladas en background
+        self.micro_apps_updater = CheckMicroAppUpdatesThread(self)
+        self.micro_apps_updater.update_found.connect(self._on_micro_app_update_found)
+        self.micro_apps_updater.start()
+
     def show_update_dialog(self, version, description, download_url, size_mb):
         dialog = UpdateDialog(version, description, download_url, size_mb, self)
         dialog.exec()
+
+    def _on_micro_app_update_found(self, app_id: str, new_version: str):
+        card = self._card_dict.get(app_id)
+        if card:
+            card.set_update_available(new_version)
+            card.apply_styles(self._tm.hub_styles())
 
     # ── Layout ───────────────────────────────────────────────────────────────
 
@@ -433,7 +551,7 @@ class HubWindow(QMainWindow):
 
         main_layout.addLayout(self.grid_layout)
 
-    # ── Card handler (Instalar / Abrir) ───────────────────────────────────────
+    # ── Card handler (Instalar / Abrir / Actualizar) ───────────────────────────
 
     def _handle_card(self, app_id: str):
         card = self._card_dict.get(app_id)
@@ -442,12 +560,12 @@ class HubWindow(QMainWindow):
         state = getattr(card, "_btn_state", "disabled")
         if state == "open":
             launch_app(app_id)
-        elif state == "install":
-            self._start_install(app_id)
+        elif state in ("install", "update"):
+            self._start_install_or_update(app_id)
 
-    def _start_install(self, app_id: str):
+    def _start_install_or_update(self, app_id: str):
         if app_id in self._workers:
-            return  # ya se está instalando
+            return  # ya se está descargando/instalando
 
         reg = APP_REGISTRY.get(app_id)
         if not reg:
@@ -459,7 +577,7 @@ class HubWindow(QMainWindow):
 
         worker = InstallWorker(app_id, parent=self)
         worker.progress.connect(lambda pct, msg: self._on_install_progress(app_id, pct, msg))
-        worker.finished.connect(lambda name: self._on_install_done(app_id, name))
+        worker.finished.connect(self._on_install_done)
         worker.error.connect(lambda err: self._on_install_error(app_id, err))
         self._workers[app_id] = worker
         worker.start()
@@ -473,12 +591,13 @@ class HubWindow(QMainWindow):
         self._workers.pop(app_id, None)
         card = self._card_dict.get(app_id)
         if card:
+            card._pending_update_version = None
             card.refresh_state()
             styles = self._tm.hub_styles()
             card.apply_styles(styles)
-        QMessageBox.information(self, "Instalación completa",
-                                f"✅ {name} se instaló correctamente.\n"
-                                f"Ya puedes abrirlo desde el Hub.")
+        QMessageBox.information(self, "Operación exitosa",
+                                f"✅ {name} se ha instalado/actualizado correctamente.\n"
+                                f"Ya puedes usar la versión más reciente.")
 
     def _on_install_error(self, app_id: str, err: str):
         self._workers.pop(app_id, None)

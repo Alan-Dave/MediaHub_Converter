@@ -20,6 +20,9 @@ LIGHT = {
     "btn_install_bg":  "#218838",
     "btn_install_hover":"#28A745",
     "btn_install_press":"#1E7E34",
+    "btn_update_bg":   "#E67E22",
+    "btn_update_hover": "#F39C12",
+    "btn_update_press": "#D35400",
     "btn_disabled_bg": "#A0A5AA",
     "btn_disabled_fg": "#444444",
 }
@@ -42,6 +45,9 @@ DARK = {
     "btn_install_bg":  "#1A6B3A",
     "btn_install_hover":"#22884A",
     "btn_install_press":"#145230",
+    "btn_update_bg":   "#D35400",
+    "btn_update_hover": "#E67E22",
+    "btn_update_press": "#BA4A00",
     "btn_disabled_bg": "#2E2E3E",
     "btn_disabled_fg": "#666680",
 }
@@ -124,6 +130,20 @@ def get_styles(theme: dict) -> dict:
         QPushButton:pressed {{ background-color: {theme["btn_open_press"]}; }}
     """
 
+    btn_update = f"""
+        QPushButton {{
+            background-color: {theme["btn_update_bg"]};
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: bold;
+            font-size: 11pt;
+        }}
+        QPushButton:hover  {{ background-color: {theme["btn_update_hover"]}; }}
+        QPushButton:pressed {{ background-color: {theme["btn_update_press"]}; }}
+    """
+
     btn_disabled = f"""
         QPushButton {{
             background-color: {theme["btn_disabled_bg"]};
@@ -167,6 +187,7 @@ def get_styles(theme: dict) -> dict:
         "card_subtitle":card_subtitle,
         "btn_install":  btn_install,
         "btn_open":     btn_open,
+        "btn_update":   btn_update,
         "btn_disabled": btn_disabled,
         "portable":     portable_label,
         "toggle_btn":   toggle_btn,
