@@ -4,7 +4,10 @@ on:
   push:
     tags:
       - 'v*' # Trigger solo cuando creas un tag como v1.0.0
-  workflow_dispatch: # Permite ejecutar el build manualmente desde GitHub
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
