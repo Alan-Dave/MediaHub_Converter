@@ -182,6 +182,14 @@ class InstallWorker(QThread):
         try:
             self.progress.emit(5, "Consultando GitHub…")
             resp = requests.get(api, timeout=15)
+            if resp.status_code == 404:
+                self.error.emit(
+                    f"No se encontró ninguna versión disponible para '{reg['name']}'.\n\n"
+                    "Causas posibles:\n"
+                    "1. El repositorio está en modo 'Private'. Debe ser 'Public' para que el Launcher pueda descargar las releases sin requerir un token de GitHub.\n"
+                    "2. Aún no se ha compilado ni publicado ninguna Release en GitHub Actions para esta aplicación."
+                )
+                return
             resp.raise_for_status()
             data = resp.json()
             latest_tag = data.get("tag_name", "1.0.0")
