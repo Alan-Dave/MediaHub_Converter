@@ -203,14 +203,16 @@ class CheckUpdateThread(QThread):
                 is_newer = (curr_v != lat_v)
             else:
                 is_newer = False
+                is_older = False
                 for c, l in zip(curr_parts, lat_parts):
                     if l > c:
                         is_newer = True
                         break
                     elif l < c:
+                        is_older = True
                         break
 
-                if len(lat_parts) > len(curr_parts) and not is_newer:
+                if len(lat_parts) > len(curr_parts) and not is_newer and not is_older:
                     is_newer = True
 
             if is_newer:
@@ -255,14 +257,16 @@ def check_for_updates(parent=None):
             is_newer = (curr_v != lat_v)
         else:
             is_newer = False
+            is_older = False
             for c, l in zip(curr_parts, lat_parts):
                 if l > c:
                     is_newer = True
                     break
                 elif l < c:
+                    is_older = True
                     break
 
-            if len(lat_parts) > len(curr_parts) and not is_newer:
+            if len(lat_parts) > len(curr_parts) and not is_newer and not is_older:
                 is_newer = True
 
         if is_newer:
