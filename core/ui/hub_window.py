@@ -100,8 +100,8 @@ def launch_app(app_id: str):
     """Lanza la micro-app instalada como proceso independiente."""
     exe = get_app_exe(app_id)
     if exe:
-        subprocess.Popen([exe], creationflags=subprocess.CREATE_NO_WINDOW
-                         if sys.platform == "win32" else 0)
+        app_dir = os.path.dirname(exe)
+        subprocess.Popen([exe], cwd=app_dir)
 
 
 def is_version_newer(current_ver: str, latest_ver: str) -> bool:
