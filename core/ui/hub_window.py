@@ -6,14 +6,16 @@ import subprocess
 import zipfile
 import tempfile
 import threading
+import shutil
 
 import requests
 from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
     QLabel, QPushButton, QGridLayout, QFrame,
-    QGraphicsDropShadowEffect, QMessageBox, QApplication
+    QGraphicsDropShadowEffect, QMessageBox, QApplication,
+    QMenu
 )
-from PyQt6.QtGui import QPixmap, QIcon, QColor, QDrag
+from PyQt6.QtGui import QPixmap, QIcon, QColor, QDrag, QAction
 from PyQt6.QtCore import QMimeData, Qt, QSize, QThread, pyqtSignal
 
 from core.theme_manager import ThemeManager
@@ -72,6 +74,19 @@ def save_installed_version(app_id: str, version: str):
             json.dump(data, f, indent=2)
     except Exception as e:
         print(f"Error guardando versión instalada: {e}")
+
+
+def remove_installed_version(app_id: str):
+    """Elimina el registro de versión de una micro-app desinstalada."""
+    data = load_installed_versions()
+    if app_id in data:
+        del data[app_id]
+        fpath = get_installed_versions_file()
+        try:
+            with open(fpath, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2)
+        except Exception as e:
+            print(f"Error actualizando registro tras desinstalar: {e}")
 
 
 def get_app_exe(app_id: str) -> str | None:
@@ -315,6 +330,16 @@ class AppCard(QFrame):
         self.action_btn = QPushButton()
         self.action_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         action_layout.addWidget(self.action_btn)
+
+        # Botón secundario de opciones (Reinstalar / Desinstalar)
+        self.options_btn = QPushButton("⋮")
+        self.options_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.options_btn.setFixedWidth(36)
+        self.options_btn.setToolTip("Opciones de la aplicación (Reinstalar / Desinstalar)")
+        self.options_btn.clicked.connect(self._show_options_menu)
+        self.options_btn.hide()
+        action_layout.addWidget(self.options_btn)
+
         action_layout.addStretch()
 
         # Etiqueta de estado y versión
@@ -331,6 +356,36 @@ class AppCard(QFrame):
         """Notifica a la tarjeta que hay una nueva versión disponible."""
         self._pending_update_version = new_version
         self._set_btn_state("update")
+
+    def _show_options_menu(self):
+        """Despliega el menú contextual con opciones para la app instalada."""
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu {
+                background-color: #252836;
+                color: #FFFFFF;
+                border: 1px solid #3B4252;
+                border-radius: 8px;
+                padding: 6px;
+            }
+            QMenu::item {
+                padding: 8px 20px;
+                border-radius: 4px;
+                font-weight: 600;
+            }
+            QMenu::item:selected {
+                background-color: #3B5EFF;
+                color: #FFFFFF;
+            }
+        """)
+
+        reinstall_act = menu.addAction("🔄  Reinstalar")
+        reinstall_act.triggered.connect(lambda: self.window()._reinstall_app(self.card_id))
+
+        uninstall_act = menu.addAction("🗑️  Desinstalar")
+        uninstall_act.triggered.connect(lambda: self.window()._uninstall_app(self.card_id))
+
+        menu.exec(self.options_btn.mapToGlobal(self.options_btn.rect().bottomLeft()))
 
     def refresh_state(self):
         """Actualiza el botón según si la app está instalada o pendiente de actualización."""
@@ -361,22 +416,26 @@ class AppCard(QFrame):
             self.action_btn.setEnabled(True)
             v_text = f" (v{cur_ver})" if cur_ver else ""
             self._status_label.setText(f"✅ Instalado{v_text}")
+            self.options_btn.show()
         elif state == "update":
             self.action_btn.setText(" ACTUALIZAR")
             self.action_btn.setIcon(
                 self.style().standardIcon(self.style().StandardPixmap.SP_BrowserReload))
             self.action_btn.setEnabled(True)
             self._status_label.setText(f"🚀 v{self._pending_update_version} disponible!")
+            self.options_btn.show()
         elif state == "install":
             self.action_btn.setText(" INSTALAR")
             self.action_btn.setIcon(
                 self.style().standardIcon(self.style().StandardPixmap.SP_ArrowDown))
             self.action_btn.setEnabled(True)
             self._status_label.setText("⬇ No instalado")
+            self.options_btn.hide()
         else:
             self.action_btn.setText(" PRÓXIMAMENTE")
             self.action_btn.setEnabled(False)
             self._status_label.setText("")
+            self.options_btn.hide()
 
     # ── Drag & Drop ──────────────────────────────────────────────────────────
 
@@ -423,6 +482,23 @@ class AppCard(QFrame):
         self._title_label.setStyleSheet(styles["card_title"])
         self._subtitle_label.setStyleSheet(styles["card_subtitle"])
         self._status_label.setStyleSheet(styles.get("portable", ""))
+        self.options_btn.setStyleSheet(styles.get("btn_options", """
+            QPushButton {
+                background-color: #323545;
+                color: #FFFFFF;
+                border: 1px solid #45495E;
+                border-radius: 6px;
+                font-size: 14pt;
+                font-weight: bold;
+                padding: 4px;
+            }
+            QPushButton:hover {
+                background-color: #43475D;
+            }
+            QPushButton:pressed {
+                background-color: #282B38;
+            }
+        """))
         state = getattr(self, "_btn_state", "disabled")
         if state == "install":
             self.action_btn.setStyleSheet(styles["btn_install"])
@@ -615,6 +691,64 @@ class HubWindow(QMainWindow):
             styles = self._tm.hub_styles()
             card.apply_styles(styles)
         QMessageBox.critical(self, "Error de instalación", err)
+
+    def _reinstall_app(self, app_id: str):
+        """Fuerza la reinstalación descargando nuevamente la última versión."""
+        reg = APP_REGISTRY.get(app_id)
+        app_name = reg["name"] if reg else app_id
+        reply = QMessageBox.question(
+            self,
+            "Reinstalar aplicación",
+            f"¿Deseas descargar y reinstalar <b>{app_name}</b>?<br><br>"
+            "Esto sobreescribirá los archivos de la app con la versión más reciente.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self._start_install_or_update(app_id)
+
+    def _uninstall_app(self, app_id: str):
+        """Desinstala por completo la micro-app seleccionada."""
+        reg = APP_REGISTRY.get(app_id)
+        if not reg:
+            return
+        app_name = reg["name"]
+
+        reply = QMessageBox.question(
+            self,
+            "Desinstalar aplicación",
+            f"¿Estás seguro de que deseas desinstalar <b>{app_name}</b>?<br><br>"
+            "Se eliminarán los archivos locales de la aplicación y volverá al estado 'No instalado'.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        install_base = get_apps_install_dir()
+        app_dir = os.path.join(install_base, reg["dir"])
+
+        try:
+            if os.path.exists(app_dir):
+                shutil.rmtree(app_dir)
+            remove_installed_version(app_id)
+            card = self._card_dict.get(app_id)
+            if card:
+                card._pending_update_version = None
+                card.refresh_state()
+                card.apply_styles(self._tm.hub_styles())
+            QMessageBox.information(
+                self,
+                "Desinstalación completa",
+                f"✅ {app_name} se ha desinstalado correctamente."
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error al desinstalar",
+                f"No se pudo completar la desinstalación de {app_name}:\n{e}\n\n"
+                "Asegúrate de que la aplicación no esté abierta en segundo plano."
+            )
 
     # ── Drag & Drop ──────────────────────────────────────────────────────────
 
